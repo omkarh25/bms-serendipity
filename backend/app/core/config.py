@@ -1,32 +1,39 @@
-"""Application configuration settings."""
-
-from pydantic import BaseSettings
+"""
+Configuration settings for the application
+"""
 from typing import Optional
-import os
+from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    """Application settings.
+    """
+    Application settings
     
     Attributes:
-        APP_NAME: Name of the application
+        API_V1_STR: API version string
+        PROJECT_NAME: Name of the project
+        APP_NAME: Application name
         DEBUG: Debug mode flag
-        API_V1_STR: API version prefix
-        PROJECT_ROOT: Root directory of the project
-        DATABASE_URL: Database connection URL
-        SECRET_KEY: Secret key for JWT token generation
-        ACCESS_TOKEN_EXPIRE_MINUTES: JWT token expiration time in minutes
+        TELEGRAM_API_ID: Telegram API ID
+        TELEGRAM_API_HASH: Telegram API Hash
+        TELEGRAM_PHONE_NUMBER: Telegram phone number
+        TELEGRAM_CHANNEL_ID: Telegram channel ID
+        DATABASE_URL: SQLite database URL
     """
-    
-    APP_NAME: str = "BMS API"
-    DEBUG: bool = True
     API_V1_STR: str = "/api/v1"
-    PROJECT_ROOT: str = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-    DATABASE_URL: str = "sqlite:///./kaas.db"
-    SECRET_KEY: str = "your-secret-key-for-jwt"  # Change in production
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
-
+    PROJECT_NAME: str = "BMS Serendipity"
+    APP_NAME: str = "BMS Serendipity"
+    DEBUG: bool = True
+    
+    # Telegram Settings
+    TELEGRAM_API_ID: int  # Changed to int
+    TELEGRAM_API_HASH: str
+    TELEGRAM_PHONE_NUMBER: str
+    TELEGRAM_CHANNEL_ID: int
+    
+    # Database Settings
+    DATABASE_URL: str = "sqlite:///./sql_app.db"
+    
     class Config:
-        case_sensitive = True
+        env_file = ".env"
 
-# Create global settings object
 settings = Settings()
