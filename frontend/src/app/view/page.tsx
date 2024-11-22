@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import { TransactionsAPI, AccountsAPI, FutureAPI } from "@/utils/api";
 import { Transaction, Account, FuturePrediction } from "@/types/models";
+import CalendarView from "@/components/CalendarView";
 
-type Role = "CA" | "Budget Analyst" | "Owner";
+type Role = "CA" | "Budget Analyst" | "Owner" | "Calendar";
 
 export default function ViewPage() {
   const [selectedRole, setSelectedRole] = useState<Role>("Owner");
@@ -213,6 +214,10 @@ export default function ViewPage() {
     </div>
   );
 
+  const renderCalendarView = () => (
+    <CalendarView transactions={transactions} futurePredictions={futurePredictions} />
+  );
+
   const renderContent = () => {
     switch (selectedRole) {
       case "CA":
@@ -221,6 +226,8 @@ export default function ViewPage() {
         return renderBudgetAnalystView();
       case "Owner":
         return renderOwnerView();
+      case "Calendar":
+        return renderCalendarView();
       default:
         return null;
     }
@@ -248,6 +255,7 @@ export default function ViewPage() {
           <option value="Owner">Owner</option>
           <option value="CA">CA</option>
           <option value="Budget Analyst">Budget Analyst</option>
+          <option value="Calendar">Calendar</option>
         </select>
       </div>
 
