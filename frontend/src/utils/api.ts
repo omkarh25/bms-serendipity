@@ -31,9 +31,9 @@ export class APIError extends Error {
  * Generic API response type
  */
 type APIResponse<T> = {
-  data?: T;
+  data: T;
   error?: string;
-} | T;
+};
 
 /**
  * Empty request type for endpoints that don't require a body
@@ -44,7 +44,7 @@ type EmptyRequest = Record<string, never>;
  * Base API client class with common HTTP methods
  */
 class APIClient {
-  private static async handleResponse<T>(response: Response): Promise<T> {
+  private static async handleResponse<T>(response: Response): Promise<APIResponse<T>> {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ message: 'An error occurred' }));
       throw new APIError(response.status, error.message || 'An error occurred');
@@ -52,15 +52,19 @@ class APIClient {
 
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      const data = await response.json();
-      // Handle both response formats (direct data or {data: ...})
-      return (data.data !== undefined ? data : { data }) as T;
+      const jsonData = await response.json();
+      // If the response is already in the correct format, return it
+      if (jsonData.data !== undefined) {
+        return jsonData as APIResponse<T>;
+      }
+      // Otherwise, wrap the data in our response format
+      return { data: jsonData as T };
     }
     
     throw new APIError(response.status, 'Invalid response format');
   }
 
-  static async get<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
+  static async get<T>(endpoint: string, params?: Record<string, string>): Promise<APIResponse<T>> {
     try {
       const url = new URL(`${API_BASE_URL}${endpoint}`);
       if (params) {
@@ -85,7 +89,7 @@ class APIClient {
     }
   }
 
-  static async post<T, D>(endpoint: string, data: D): Promise<T> {
+  static async post<T, D>(endpoint: string, data: D): Promise<APIResponse<T>> {
     try {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
@@ -104,7 +108,7 @@ class APIClient {
     }
   }
 
-  static async put<T, D>(endpoint: string, data: D): Promise<T> {
+  static async put<T, D>(endpoint: string, data: D): Promise<APIResponse<T>> {
     try {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'PUT',
@@ -123,7 +127,7 @@ class APIClient {
     }
   }
 
-  static async delete<T>(endpoint: string): Promise<T> {
+  static async delete<T>(endpoint: string): Promise<APIResponse<T>> {
     try {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'DELETE',
@@ -147,22 +151,22 @@ class APIClient {
  */
 export const TransactionsAPI = {
   getAll: (params?: Record<string, string>) => 
-    APIClient.get<APIResponse<Transaction[]>>('/transactions/', params),
+    APIClient.get<Transaction[]>('/transactions/', params),
   
   getById: (id: number) => 
-    APIClient.get<APIResponse<Transaction>>(`/transactions/${id}/`),
+    APIClient.get<Transaction>(`/transactions/${id}/`),
   
   create: (data: TransactionCreate) => 
-    APIClient.post<APIResponse<Transaction>, TransactionCreate>('/transactions/', data),
+    APIClient.post<Transaction, TransactionCreate>('/transactions/', data),
   
   update: (id: number, data: TransactionUpdate) => 
-    APIClient.put<APIResponse<Transaction>, TransactionUpdate>(`/transactions/${id}/`, data),
+    APIClient.put<Transaction, TransactionUpdate>(`/transactions/${id}/`, data),
   
   delete: (id: number) => 
-    APIClient.delete<APIResponse<Transaction>>(`/transactions/${id}/`),
+    APIClient.delete<Transaction>(`/transactions/${id}/`),
   
   getByDateRange: (startDate: string, endDate: string) => 
-    APIClient.get<APIResponse<Transaction[]>>(`/transactions/date-range/?start_date=${startDate}&end_date=${endDate}`),
+    APIClient.get<Transaction[]>(`/transactions/date-range/?start_date=${startDate}&end_date=${endDate}`),
 };
 
 /**
@@ -170,25 +174,25 @@ export const TransactionsAPI = {
  */
 export const AccountsAPI = {
   getAll: (params?: Record<string, string>) => 
-    APIClient.get<APIResponse<Account[]>>('/accounts', params),
+    APIClient.get<Account[]>('/accounts/', params),
   
   getById: (id: number) => 
-    APIClient.get<APIResponse<Account>>(`/accounts/${id}`),
+    APIClient.get<Account>(`/accounts/${id}/`),
   
   getByCcId: (ccId: string) => 
-    APIClient.get<APIResponse<Account>>(`/accounts/by-ccid/${ccId}`),
+    APIClient.get<Account>(`/accounts/by-ccid/${ccId}/`),
   
   create: (data: AccountCreate) => 
-    APIClient.post<APIResponse<Account>, AccountCreate>('/accounts', data),
+    APIClient.post<Account, AccountCreate>('/accounts/', data),
   
   update: (id: number, data: AccountUpdate) => 
-    APIClient.put<APIResponse<Account>, AccountUpdate>(`/accounts/${id}`, data),
+    APIClient.put<Account, AccountUpdate>(`/accounts/${id}/`, data),
   
   delete: (id: number) => 
-    APIClient.delete<APIResponse<Account>>(`/accounts/${id}`),
+    APIClient.delete<Account>(`/accounts/${id}/`),
   
   adjustBalance: (ccId: string, amount: number) => 
-    APIClient.post<APIResponse<Account>, { amount: number }>(`/accounts/${ccId}/balance`, { amount }),
+    APIClient.post<Account, { amount: number }>(`/accounts/${ccId}/balance/`, { amount }),
 };
 
 /**
@@ -196,23 +200,23 @@ export const AccountsAPI = {
  */
 export const FutureAPI = {
   getAll: (params?: Record<string, string>) => 
-    APIClient.get<APIResponse<FuturePrediction[]>>('/future', params),
+    APIClient.get<FuturePrediction[]>('/future/', params),
   
   getById: (id: number) => 
-    APIClient.get<APIResponse<FuturePrediction>>(`/future/${id}`),
+    APIClient.get<FuturePrediction>(`/future/${id}/`),
   
   create: (data: FuturePredictionCreate) => 
-    APIClient.post<APIResponse<FuturePrediction>, FuturePredictionCreate>('/future', data),
+    APIClient.post<FuturePrediction, FuturePredictionCreate>('/future/', data),
   
   update: (id: number, data: FuturePredictionUpdate) => 
-    APIClient.put<APIResponse<FuturePrediction>, FuturePredictionUpdate>(`/future/${id}`, data),
+    APIClient.put<FuturePrediction, FuturePredictionUpdate>(`/future/${id}/`, data),
   
   delete: (id: number) => 
-    APIClient.delete<APIResponse<FuturePrediction>>(`/future/${id}`),
+    APIClient.delete<FuturePrediction>(`/future/${id}/`),
   
   markAsPaid: (id: number) => 
-    APIClient.post<APIResponse<FuturePrediction>, EmptyRequest>(`/future/${id}/mark-paid`, {}),
+    APIClient.post<FuturePrediction, EmptyRequest>(`/future/${id}/mark-paid/`, {}),
   
   getByDateRange: (startDate: string, endDate: string) => 
-    APIClient.get<APIResponse<FuturePrediction[]>>(`/future/date-range?start_date=${startDate}&end_date=${endDate}`),
+    APIClient.get<FuturePrediction[]>(`/future/date-range/?start_date=${startDate}&end_date=${endDate}`),
 };

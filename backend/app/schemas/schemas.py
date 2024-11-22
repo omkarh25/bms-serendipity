@@ -23,15 +23,15 @@ class TransactionCreate(TransactionBase):
 
 class TransactionUpdate(BaseModel):
     """Schema for updating a transaction."""
-    date: Optional[date] = None
-    description: Optional[str] = None
-    amount: Optional[Decimal] = None
-    payment_mode: Optional[PaymentMode] = None
-    acc_id: Optional[str] = None
-    department: Optional[Department] = None
-    comments: Optional[str] = None
-    category: Optional[Category] = None
-    zoho_match: Optional[bool] = None
+    Date: Optional[date] = None
+    Description: Optional[str] = None
+    Amount: Optional[Decimal] = None
+    PaymentMode: Optional[PaymentMode] = None
+    AccID: Optional[str] = None
+    Department: Optional[Department] = None
+    Comments: Optional[str] = None
+    Category: Optional[Category] = None
+    ZohoMatch: Optional[bool] = None
 
 class Transaction(TransactionBase, BaseSchema):
     """Schema for transaction response."""
@@ -39,6 +39,8 @@ class Transaction(TransactionBase, BaseSchema):
 
     class Config:
         orm_mode = True
+        allow_population_by_field_name = True
+        alias_generator = lambda x: x  # Preserve original casing
 
 class AccountBase(BaseModel):
     """Base schema for accounts."""
@@ -50,7 +52,7 @@ class AccountBase(BaseModel):
     NextDueDate: Optional[str] = None
     Bank: PaymentMode
     Tenure: Optional[int] = None
-    EmiAmt: Optional[Decimal] = None
+    EMIAmt: Optional[Decimal] = None
     Comments: Optional[str] = None
 
 class AccountCreate(AccountBase):
@@ -59,16 +61,20 @@ class AccountCreate(AccountBase):
 
 class AccountUpdate(BaseModel):
     """Schema for updating an account."""
-    account_name: Optional[str] = None
-    type: Optional[AccountType] = None
-    acc_id: Optional[str] = None
-    balance: Optional[Decimal] = None
-    int_rate: Optional[Decimal] = None
-    next_due_date: Optional[str] = None
-    bank: Optional[PaymentMode] = None
-    tenure: Optional[int] = None
-    emi_amt: Optional[Decimal] = None
-    comments: Optional[str] = None
+    AccountName: Optional[str] = None
+    Type: Optional[AccountType] = None
+    AccID: Optional[str] = None
+    Balance: Optional[Decimal] = None
+    IntRate: Optional[Decimal] = None
+    NextDueDate: Optional[str] = None
+    Bank: Optional[PaymentMode] = None
+    Tenure: Optional[int] = None
+    EMIAmt: Optional[Decimal] = None
+    Comments: Optional[str] = None
+
+    class Config:
+        allow_population_by_field_name = True
+        alias_generator = lambda x: x  # Preserve original casing
 
 class Account(AccountBase, BaseSchema):
     """Schema for account response."""
@@ -78,6 +84,8 @@ class Account(AccountBase, BaseSchema):
 
     class Config:
         orm_mode = True
+        allow_population_by_field_name = True
+        alias_generator = lambda x: x  # Preserve original casing
 
 class FutureBase(BaseModel):
     """Base schema for future predictions."""
@@ -97,15 +105,19 @@ class FutureCreate(FutureBase):
 
 class FutureUpdate(BaseModel):
     """Schema for updating a future prediction."""
-    date: Optional[date] = None
-    description: Optional[str] = None
-    amount: Optional[Decimal] = None
-    payment_mode: Optional[PaymentMode] = None
-    acc_id: Optional[str] = None
-    department: Optional[Department] = None
-    comments: Optional[str] = None
-    category: Optional[Category] = None
-    paid: Optional[bool] = None
+    Date: Optional[date] = None
+    Description: Optional[str] = None
+    Amount: Optional[Decimal] = None
+    PaymentMode: Optional[PaymentMode] = None
+    AccID: Optional[str] = None
+    Department: Optional[Department] = None
+    Comments: Optional[str] = None
+    Category: Optional[Category] = None
+    Paid: Optional[bool] = None
+
+    class Config:
+        allow_population_by_field_name = True
+        alias_generator = lambda x: x  # Preserve original casing
 
 class FuturePrediction(FutureBase, BaseSchema):
     """Schema for future prediction response."""
@@ -113,6 +125,8 @@ class FuturePrediction(FutureBase, BaseSchema):
 
     class Config:
         orm_mode = True
+        allow_population_by_field_name = True
+        alias_generator = lambda x: x  # Preserve original casing
 
 # Update Account model to include the forward reference
 Account.update_forward_refs()

@@ -29,10 +29,12 @@ export default function ViewPage() {
         FutureAPI.getAll(),
       ]);
 
+      console.log('Accounts data:', accountsRes.data); // Debug log
       setTransactions(transactionsRes.data);
       setAccounts(accountsRes.data);
       setFuturePredictions(futureRes.data);
     } catch (err) {
+      console.error('Error fetching data:', err); // Debug log
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
@@ -40,7 +42,10 @@ export default function ViewPage() {
   };
 
   const calculateTotalBalance = () => {
-    return accounts.reduce((total, account) => total + account.balance, 0);
+    return accounts.reduce((total, account) => {
+      console.log('Account:', account); // Debug log
+      return total + (account.Balance || 0);
+    }, 0);
   };
 
   const calculateMonthlyExpenses = () => {
@@ -48,22 +53,22 @@ export default function ViewPage() {
     const currentYear = new Date().getFullYear();
     return transactions
       .filter((t) => {
-        const transactionDate = new Date(t.date);
+        const transactionDate = new Date(t.Date);
         return (
           transactionDate.getMonth() === currentMonth &&
           transactionDate.getFullYear() === currentYear &&
-          t.amount < 0
+          t.Amount < 0
         );
       })
-      .reduce((total, t) => total + Math.abs(t.amount), 0);
+      .reduce((total, t) => total + Math.abs(t.Amount), 0);
   };
 
   const calculateUpcomingPayments = () => {
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
     return futurePredictions
-      .filter((f) => !f.paid && new Date(f.date) <= nextMonth)
-      .reduce((total, f) => total + Math.abs(f.amount), 0);
+      .filter((f) => !f.Paid && new Date(f.Date) <= nextMonth)
+      .reduce((total, f) => total + Math.abs(f.Amount), 0);
   };
 
   const renderCAView = () => (
@@ -91,7 +96,7 @@ export default function ViewPage() {
         <div className="space-y-4">
           {Object.entries(
             accounts.reduce((acc, account) => {
-              acc[account.type] = (acc[account.type] || 0) + 1;
+              acc[account.Type] = (acc[account.Type] || 0) + 1;
               return acc;
             }, {} as Record<string, number>)
           ).map(([type, count]) => (
@@ -130,8 +135,8 @@ export default function ViewPage() {
         <div className="space-y-4">
           {Object.entries(
             transactions.reduce((acc, transaction) => {
-              if (transaction.amount < 0) {
-                acc[transaction.department] = (acc[transaction.department] || 0) + Math.abs(transaction.amount);
+              if (transaction.Amount < 0) {
+                acc[transaction.Department] = (acc[transaction.Department] || 0) + Math.abs(transaction.Amount);
               }
               return acc;
             }, {} as Record<string, number>)
@@ -172,7 +177,7 @@ export default function ViewPage() {
           <div className="space-y-4">
             {Object.entries(
               transactions.reduce((acc, transaction) => {
-                acc[transaction.department] = (acc[transaction.department] || 0) + transaction.amount;
+                acc[transaction.Department] = (acc[transaction.Department] || 0) + transaction.Amount;
                 return acc;
               }, {} as Record<string, number>)
             ).map(([department, balance]) => (
@@ -191,7 +196,7 @@ export default function ViewPage() {
           <div className="space-y-4">
             {Object.entries(
               accounts.reduce((acc, account) => {
-                acc[account.type] = (acc[account.type] || 0) + account.balance;
+                acc[account.Type] = (acc[account.Type] || 0) + account.Balance;
                 return acc;
               }, {} as Record<string, number>)
             ).map(([type, balance]) => (
