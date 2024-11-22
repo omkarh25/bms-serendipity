@@ -1,0 +1,297 @@
+{
+  "project_name": "BMS",
+  "vision": "Assists working with tabular data, by providing MVC functionality. Currently implemented for serendipity book keeping section.\nAbstract:\nI need a simple webapp which assists working with tabular data, by providing MVC functionality.\n\nThe app flow is as follows:\n1. Model: Shows data in tabular format with options to filter and sort data. Dropdown for selecting the table.\n2. View: Process and represent data for givel role. Eg: CA, Budget Analyst, Owner. \n3. Controller: Provides buttons execute processes llike add employee, add transaction, add account, add chit, add loan, add income, add expense etc.,\n\nImplementation Case:\nI have an Excel file with accounts present, transaction past and freedom future sheets.\n\nModel: Refer to Index Kaas.md for data schema.\nView: CA, Budget Analyst, Owner. \n\nController: \na. Add transaction: Add unplanned transaction to Transaction Past sheet with all fields, Add frequency based entries to future sheet if its a recurring transaction, Add updates to relevant accounts in Accounts Present sheet\nb. Add new account: Used incase of using account sheet as entry point. Useful in adding new chits, loans, EMI's, etc.\nc. Add single future entry: Add single future entry to Freedom Future sheet with all fields, Add updates to relevant accounts in Accounts Present sheet\nf. Process future transactions: Date based for credits and checkbox tick based for bank and cash payments\n\nView:\na. Generate daily report in prescribed format\nb. Generate view components based on role using pre-defined templates\nc. Need view for CA template, Owner template, Budget Analyst template",
+  "reference_links": [
+    {
+      "link": "https://chatgpt.com/c/6734e276-faa0-8001-849a-72fd48c662f5",
+      "features": [
+        "Vedic Maths for simplication for transactions"
+      ]
+    }
+  ],
+  "tech_stack": {
+    "domain": "https://ams.theserendipity.org/",
+    "repo_name": "ams-Serendipity",
+    "frontend_framework": "NextJS",
+    "backend_framework": "FastAPI",
+    "databases": [
+      "SQLlite for storing transactions"
+    ],
+    "team_members": [
+      "Omkar Hegde",
+      "Amol Kittur"
+    ],
+    "deployment_option": "Docker"
+  },
+  "database_schema": {
+    "tables": [
+      {
+        "name": "TransactionsPast",
+        "fields": [
+          {
+            "name": "SlNo",
+            "type": "integer",
+            "required": true,
+            "description": "Serial number of transaction",
+            "rules": "Auto Increment"
+          },
+          {
+            "name": "Date",
+            "type": "date",
+            "required": true,
+            "description": "Date of creation",
+            "rules": "Format: DD-MON-YY"
+          },
+          {
+            "name": "Description",
+            "type": "string",
+            "required": true,
+            "description": "Description of the transaction",
+            "rules": "ReceivingParty_Monthly will match with bankstatement"
+          },
+          {
+            "name": "Amount",
+            "type": "decimal",
+            "required": true,
+            "description": "Amount of the transaction",
+            "rules": "Positive for received, negative for paid. Indian Rupee only"
+          },
+          {
+            "name": "PaymentMode",
+            "type": "enum",
+            "required": true,
+            "description": "Mode of payment",
+            "enum_values": ["ICICI Current", "ICICI-CC-9003", "ICICI-CC-1009", "Cash", "SBI", "ICICI", "Credit"]
+          },
+          {
+            "name": "AccID",
+            "type": "string",
+            "required": true,
+            "description": "Account ID for transaction categorization",
+            "rules": "3 letters + numbers (with hyphens). MAT-001 for Maintenance, SPY for salaries, INC-001 for Income, HL for Hand Loans, EMI for Bank EMI's, CHT for chits"
+          },
+          {
+            "name": "Department",
+            "type": "enum",
+            "required": true,
+            "description": "Internal department names",
+            "enum_values": ["Serendipity", "Dhoom Studios", "Trademan"]
+          },
+          {
+            "name": "Comments",
+            "type": "string",
+            "required": false,
+            "description": "Detailed descriptions of the Income and Expense"
+          },
+          {
+            "name": "Category",
+            "type": "enum",
+            "required": true,
+            "description": "Transaction category type",
+            "enum_values": ["Salaries", "Hand Loans", "Maintenance", "Income", "EMI", "Chits"]
+          },
+          {
+            "name": "ZohoMatch",
+            "type": "boolean",
+            "required": true,
+            "description": "If transactions are matched with Zoho while categorization"
+          }
+        ]
+      },
+      {
+        "name": "AccountsPresent",
+        "fields": [
+          {
+            "name": "SlNo",
+            "type": "integer",
+            "required": true,
+            "description": "Serial number of account",
+            "rules": "Auto Increment"
+          },
+          {
+            "name": "AccountName",
+            "type": "string",
+            "required": true,
+            "description": "Name of the Account"
+          },
+          {
+            "name": "Type",
+            "type": "enum",
+            "required": true,
+            "description": "Type of account with short ID",
+            "enum_values": ["HL", "EMI", "HLG", "CC", "CAS", "CHT", "CON", "ACC-002"]
+          },
+          {
+            "name": "ccID",
+            "type": "string",
+            "required": true,
+            "description": "Account ID for categorization",
+            "rules": "Same as TransactionsPast AccID format"
+          },
+          {
+            "name": "Balance",
+            "type": "decimal",
+            "required": true,
+            "description": "Current Balance of the account",
+            "rules": "Positive for credit, negative for debit. Indian Rupee only"
+          },
+          {
+            "name": "IntRate",
+            "type": "float",
+            "required": true,
+            "description": "Monthly Interest rate for the account",
+            "rules": "0.00 if no interest applies"
+          },
+          {
+            "name": "NextDueDate",
+            "type": "string",
+            "required": true,
+            "description": "Monthly specified date for paying EMI or Interest",
+            "rules": "Format: specific date or 'Not applicable'"
+          },
+          {
+            "name": "Bank",
+            "type": "enum",
+            "required": true,
+            "description": "Bank where transactions are made",
+            "enum_values": ["ICICI", "ICICI Current", "Credit", "SBI-3479", "Cash"]
+          },
+          {
+            "name": "Tenure",
+            "type": "integer",
+            "required": false,
+            "description": "Total Number of Months for loans"
+          },
+          {
+            "name": "EMIAmt",
+            "type": "decimal",
+            "required": false,
+            "description": "Monthly Estimated Installment or Interest amount"
+          },
+          {
+            "name": "Comments",
+            "type": "string",
+            "required": false,
+            "description": "Detailed descriptions of the Account"
+          }
+        ]
+      },
+      {
+        "name": "FreedomFuture",
+        "fields": [
+          {
+            "name": "TrNo",
+            "type": "integer",
+            "required": true,
+            "description": "Serial number",
+            "rules": "Auto Increment"
+          },
+          {
+            "name": "Date",
+            "type": "date",
+            "required": true,
+            "description": "Date of creation",
+            "rules": "Format: DD-MON-YY"
+          },
+          {
+            "name": "Description",
+            "type": "string",
+            "required": true,
+            "description": "Description of forecasted transaction"
+          },
+          {
+            "name": "Amount",
+            "type": "decimal",
+            "required": true,
+            "description": "Amount of forecasted transaction",
+            "rules": "Positive for income, negative for expense. Indian Rupee only"
+          },
+          {
+            "name": "PaymentMode",
+            "type": "enum",
+            "required": true,
+            "description": "Forecasted payment mode",
+            "enum_values": ["ICICI Current", "ICICI-CC-9003", "ICICI-CC-1009", "Cash", "SBI", "ICICI", "Credit"]
+          },
+          {
+            "name": "AccID",
+            "type": "string",
+            "required": true,
+            "description": "Account ID for forecasted transaction",
+            "rules": "Same as TransactionsPast AccID format"
+          },
+          {
+            "name": "Department",
+            "type": "enum",
+            "required": true,
+            "description": "Internal department names",
+            "enum_values": ["Serendipity", "Dhoom Studios", "Trademan"]
+          },
+          {
+            "name": "Comments",
+            "type": "string",
+            "required": false,
+            "description": "Detailed descriptions of forecasted transaction"
+          },
+          {
+            "name": "Category",
+            "type": "enum",
+            "required": true,
+            "description": "Transaction category type",
+            "enum_values": ["Salaries", "Hand Loans", "Maintenance", "Income", "EMI", "Chits"]
+          },
+          {
+            "name": "Paid",
+            "type": "boolean",
+            "required": true,
+            "description": "Indicates if forecasted transaction is paid"
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "from": "TransactionsPast",
+        "to": "AccountsPresent",
+        "type": "many-to-one",
+        "fields": {
+          "from": "AccID",
+          "to": "ccID"
+        }
+      },
+      {
+        "from": "FreedomFuture",
+        "to": "AccountsPresent",
+        "type": "many-to-one",
+        "fields": {
+          "from": "AccID",
+          "to": "ccID"
+        }
+      }
+    ]
+  },
+  "user_stories": [
+    "1. User is given a dropdown to select the database.\n2. User is has 3 tabs: Model, View and Controller. The selected tab is highlighted and that component is loaded.",
+    "3. If User is on Model tab, User can filter and sort data. User can select the table from dropdown at the top of the component.\n4. If User is on View tab, User can see the data in prescribed format for his role.\n5. If User is on Controller tab, User is given buttons to execute processes like add employee, add transaction, add account, add chit, add loan, add income, add expense etc.,\n"
+  ],
+  "id": "1732276886839-ams",
+  "coding_instructions": [
+      "5. Use SOLID principles for development. Reuse components where possible.",
+    "1. The tables are present in kaas.db sqlite file at the root of the project.",
+    "2. Use NextJS and FastAPI for frontend and backend respectively.",
+    "3. Use /frontend and /backend folders for frontend and backend respectively.",
+    "4. Create docker compose file but run locally to test the app.",
+    "5. Use SOLID principles for development. Reuse components where possible.",
+    "6. RBAC will implemented later.",
+    "7. Create /docs for documentation.",
+    "8. Create good README.md file helping user to setup and run the app locally and deploy the app in docker.",
+    "9. Use shadcn/ui for components",
+    "10. Make app shortcuts for common tasks.",
+    "11. Use proper naming conventions for variables, functions, components, etc.",
+    "12. Use tailwind css for styling.",
+    "13. Add terminal commands to setup for windows, linux and mac using sh files in /scripts folder.Name them appropriately.",
+    "14. Add units for critical functions, implement functional tests for critical flows, load test for performance.",
+    "15. Provide step by step instructions for web based tasks like creating github repo,adding team members to repo, creating discord hooks etc.,",
+    "16. Dont hardcode any values. All values should be fetched from database or extracted to environment variables or config files."  
+  ]
+}

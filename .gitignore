@@ -1,0 +1,83 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pkl
+*.pyc
+
+# FastAPI specific
+instance/
+*.db
+*.sqlite3
+*.sqlite
+
+# Environment variables
+.env
+.env.*
+
+# Docker
+*.log
+docker-compose.override.yml
+*.pid
+*.seed
+*.pid.lock
+docker-compose.override.yaml
+.dockerignore
+.docker/
+Dockerfile.*
+
+# Node.js specific (Next.js)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.pnpm-debug.log*
+.cache/
+.next/
+
+# Static files
+*.lock
+*.swp
+*.swo
+*.tmp
+*.bak
+
+# Testing
+coverage/
+*.coverage
+*.pytest_cache/
+nosetests.xml
+coverage.xml
+*.codecov
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# Editor-specific files
+.vscode/
+.idea/
+*.iml
+*.sublime-workspace
+*.sublime-project
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+*.stackdump
+*.dump
+Icon?
+
+# Logs
+*.log
+logs/
+
+# Tanstack Table
+node_modules/
+
