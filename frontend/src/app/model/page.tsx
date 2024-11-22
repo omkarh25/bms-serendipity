@@ -50,7 +50,10 @@ export default function ModelPage() {
     { 
       accessorKey: "Date", 
       header: "Date",
-      cell: (info) => new Date(info.getValue() as string).toLocaleDateString()
+      cell: (info) => {
+        const date = info.getValue() as string;
+        return date ? new Date(date).toLocaleDateString() : '-';
+      }
     },
     { 
       accessorKey: "Description", 
@@ -59,7 +62,10 @@ export default function ModelPage() {
     { 
       accessorKey: "Amount", 
       header: "Amount",
-      cell: (info) => `₹${(info.getValue() as number).toFixed(2)}`,
+      cell: (info) => {
+        const amount = info.getValue() as number;
+        return amount !== undefined ? `₹${amount.toFixed(2)}` : '-';
+      },
       sortingFn: "alphanumeric"
     },
     { 
@@ -106,19 +112,28 @@ export default function ModelPage() {
     { 
       accessorKey: "Balance", 
       header: "Balance",
-      cell: (info) => `₹${(info.getValue() as number).toFixed(2)}`,
+      cell: (info) => {
+        const balance = info.getValue() as number;
+        return balance !== undefined ? `₹${balance.toFixed(2)}` : '-';
+      },
       sortingFn: "alphanumeric"
     },
     { 
       accessorKey: "IntRate", 
       header: "Interest Rate",
-      cell: (info) => `${info.getValue() as number}%`,
+      cell: (info) => {
+        const rate = info.getValue() as number;
+        return rate !== undefined ? `${rate}%` : '-';
+      },
       sortingFn: "alphanumeric"
     },
     { 
       accessorKey: "NextDueDate", 
       header: "Next Due Date",
-      cell: (info) => new Date(info.getValue() as string).toLocaleDateString()
+      cell: (info) => {
+        const date = info.getValue() as string;
+        return date ? new Date(date).toLocaleDateString() : '-';
+      }
     },
     { 
       accessorKey: "Bank", 
@@ -135,7 +150,10 @@ export default function ModelPage() {
     { 
       accessorKey: "Date", 
       header: "Date",
-      cell: (info) => new Date(info.getValue() as string).toLocaleDateString()
+      cell: (info) => {
+        const date = info.getValue() as string;
+        return date ? new Date(date).toLocaleDateString() : '-';
+      }
     },
     { 
       accessorKey: "Description", 
@@ -144,7 +162,10 @@ export default function ModelPage() {
     { 
       accessorKey: "Amount", 
       header: "Amount",
-      cell: (info) => `₹${(info.getValue() as number).toFixed(2)}`,
+      cell: (info) => {
+        const amount = info.getValue() as number;
+        return amount !== undefined ? `₹${amount.toFixed(2)}` : '-';
+      },
       sortingFn: "alphanumeric"
     },
     { 
