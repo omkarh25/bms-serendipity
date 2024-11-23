@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.crud.crud_future import crud_future
 
 # Configure logging
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -74,36 +75,59 @@ async def send_payment_notifications(
     """
     client = None
     try:
-        logger.info("Starting payment notification process...")
+        logger.info("=== Starting payment notification process ===")
+        logger.debug(f"Database session ID: {id(db)}")
+        logger.debug(f"Database session is active: {db.is_active}")
         
-        # Get upcoming payments for next 30 days
-        today = date.today()
-        end_date = today + timedelta(days=30)
+        # First verify database connection
+        try:
+            db.execute("SELECT 1")
+            logger.debug("Database connection verified")
+        except Exception as e:
+            logger.error(f"Database connection test failed: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail="Database connection failed"
+            )
         
-        # Fetch unpaid future payments within date range
-        upcoming_payments = crud_future.get_by_date_range(
+        # Get next 5 unpaid payments
+        logger.debug("Fetching unpaid payments...")
+        upcoming_payments = crud_future.get_unpaid(
             db,
-            start_date=today,
-            end_date=end_date,
-            paid=False  # This will be converted to "No" in crud_future
+            limit=5
         )
+        
+        # Debug log the found payments
+        logger.debug(f"Found {len(upcoming_payments) if upcoming_payments else 0} upcoming payments")
+        if upcoming_payments:
+            for payment in upcoming_payments:
+                logger.debug(
+                    f"Payment details: "
+                    f"TrNo={payment.TrNo}, "
+                    f"Date={payment.Date}, "
+                    f"Description={payment.Description}, "
+                    f"Amount={payment.Amount}, "
+                    f"Paid={payment.Paid}"
+                )
+        else:
+            logger.debug("No payments returned from crud_future.get_unpaid")
         
         if not upcoming_payments:
             logger.warning("No upcoming payments found")
             return {"message": "No upcoming payments found for notification"}
         
-        # Sort by date and take first 5
-        upcoming_payments = sorted(upcoming_payments, key=lambda x: x.Date)[:5]
-        
         # Initialize Telegram client
+        logger.debug("Initializing Telegram client...")
         client = await get_telegram_client()
         
         logger.info(f"Sending notifications for {len(upcoming_payments)} payments...")
         
         # Send notifications for each payment
         for i, payment in enumerate(upcoming_payments, 1):
+            logger.debug(f"Processing payment {i}/{len(upcoming_payments)}")
             message = format_payment_message(payment)
-            logger.debug(f"Sending notification {i}/{len(upcoming_payments)}")
+            logger.debug(f"Formatted message for payment {i}:\n{message}")
+            
             await client.send_message(
                 settings.TELEGRAM_CHANNEL_ID,
                 message

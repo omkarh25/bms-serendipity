@@ -11,15 +11,22 @@ from sqlalchemy.ext.declarative import declarative_base
 from app.models.models import Base
 
 # Configure logging
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+# Get the absolute path to the database file
+DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../kaas.db'))
+logger.debug(f"Database path: {DB_PATH}")
+
 # Database URL - Using SQLite for development
-SQLALCHEMY_DATABASE_URL = "sqlite:///./kaas.db"
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
+logger.debug(f"Database URL: {SQLALCHEMY_DATABASE_URL}")
 
 # Create SQLAlchemy engine
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False}  # Needed for SQLite
+    connect_args={"check_same_thread": False},  # Needed for SQLite
+    echo=True  # Enable SQL query logging
 )
 
 # Create SessionLocal class
@@ -37,14 +44,17 @@ def get_db() -> Generator[Session, None, None]:
     Raises:
         SQLAlchemyError: If there's any database related error
     """
+    logger.debug("Creating new database session")
     db = SessionLocal()
     try:
+        logger.debug(f"Database session created: {id(db)}")
         yield db
     except SQLAlchemyError as e:
+        logger.error(f"Database error: {str(e)}")
         db.rollback()
-        print(f"Database error: {str(e)}")
         raise
     finally:
+        logger.debug(f"Closing database session: {id(db)}")
         db.close()
 
 # For explicit context manager usage (e.g., in scripts)
@@ -56,15 +66,17 @@ def db_session():
     Yields:
         Session: Database session
     """
+    logger.debug("Creating new database session (context manager)")
     db = SessionLocal()
     try:
         yield db
         db.commit()
     except SQLAlchemyError as e:
+        logger.error(f"Database error: {str(e)}")
         db.rollback()
-        print(f"Database error: {str(e)}")
         raise
     finally:
+        logger.debug("Closing database session (context manager)")
         db.close()
 
 def init_db() -> None:
@@ -74,7 +86,7 @@ def init_db() -> None:
     
     try:
         Base.metadata.create_all(bind=engine)
-        print("Database tables created successfully")
+        logger.info("Database tables created successfully")
         
         # Use db_session instead of get_db for script context
         with db_session() as db:
@@ -83,21 +95,21 @@ def init_db() -> None:
             accounts = db.query(AccountsPresent).all()
             freedom = db.query(FreedomFuture).all()
             
-            print("=== TransactionsPast Table Data ===")
+            logger.debug("=== TransactionsPast Table Data ===")
             for transaction in transactions:
-                print(f"Transaction: {transaction.__dict__}")
+                logger.debug(f"Transaction: {transaction.__dict__}")
                 
-            print("\n=== AccountsPresent Table Data ===")
+            logger.debug("\n=== AccountsPresent Table Data ===")
             for account in accounts:
-                print(f"Account: {account.__dict__}")
+                logger.debug(f"Account: {account.__dict__}")
                 
-            print("\n=== FreedomFuture Table Data ===")
+            logger.debug("\n=== FreedomFuture Table Data ===")
             for future in freedom:
-                print(f"Future Goal: {future.__dict__}")
+                logger.debug(f"Future Goal: {future.__dict__}")
                 
             if not any([transactions, accounts, freedom]):
-                print("No data found in any of the tables")
+                logger.warning("No data found in any of the tables")
                 
     except SQLAlchemyError as e:
-        print(f"Error accessing database tables: {str(e)}")
+        logger.error(f"Error accessing database tables: {str(e)}")
         raise

@@ -7,12 +7,24 @@ from .core.config import settings
 from .db.init_db import init_db
 from .api.api_v1.api import api_router
 
-# Configure logging
+# Configure logging at the root level
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    force=True  # Force reconfiguration of the root logger
 )
-logger = logging.getLogger(__name__)
+
+# Get the root logger
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+
+# Ensure all other loggers inherit this configuration
+logging.getLogger('sqlalchemy.engine').setLevel(logging.DEBUG)
+logging.getLogger('fastapi').setLevel(logging.DEBUG)
+logging.getLogger('uvicorn').setLevel(logging.DEBUG)
+
+# Module logger
+module_logger = logging.getLogger(__name__)
 
 def create_application() -> FastAPI:
     """Create FastAPI application with configurations.
@@ -20,6 +32,7 @@ def create_application() -> FastAPI:
     Returns:
         FastAPI: Configured FastAPI application instance
     """
+    module_logger.debug("Creating FastAPI application")
     application = FastAPI(
         title=settings.APP_NAME,
         debug=settings.DEBUG,
@@ -34,6 +47,7 @@ def create_application() -> FastAPI:
         "http://127.0.0.1:3001",
     ]
     
+    module_logger.debug("Adding CORS middleware")
     application.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
@@ -43,6 +57,7 @@ def create_application() -> FastAPI:
     )
 
     # Include API router
+    module_logger.debug("Including API router")
     application.include_router(api_router, prefix=settings.API_V1_STR)
 
     return application
@@ -52,18 +67,19 @@ app = create_application()
 @app.on_event("startup")
 async def startup_event():
     """Initialize application services on startup."""
-    logger.info("Starting up BMS API...")
+    module_logger.info("Starting up BMS API...")
     try:
+        module_logger.debug("Initializing database")
         init_db()
-        logger.info("Database initialization completed successfully")
+        module_logger.info("Database initialization completed successfully")
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
+        module_logger.error(f"Failed to initialize database: {e}", exc_info=True)
         raise
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup application services on shutdown."""
-    logger.info("Shutting down BMS API...")
+    module_logger.info("Shutting down BMS API...")
 
 # Health check endpoint
 @app.get("/health")
@@ -73,6 +89,7 @@ async def health_check():
     Returns:
         dict: Health status
     """
+    module_logger.debug("Health check requested")
     return {
         "status": "healthy",
         "app_name": settings.APP_NAME,

@@ -2,15 +2,19 @@
 CRUD operations for Future Predictions
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
+import logging
 
 from app.crud.base import CRUDBase
 from app.models.models import FreedomFuture
 from app.schemas.schemas import FutureCreate, FutureUpdate
-from sqlalchemy import and_, desc
+from sqlalchemy import and_, desc, cast, Date, func, text
 from sqlalchemy.orm import Session
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 class CRUDFuture(CRUDBase[FreedomFuture, FutureCreate, FutureUpdate]):
     """
@@ -18,98 +22,6 @@ class CRUDFuture(CRUDBase[FreedomFuture, FutureCreate, FutureUpdate]):
 
     Extends the base CRUD class with specific operations for future predictions
     """
-
-    def get_multi(
-        self,
-        db: Session,
-        *,
-        filters: Optional[List[Dict[str, Any]]] = None,
-        order_by: Optional[str] = None,
-        skip: int = 0,
-        limit: Optional[int] = None
-    ) -> List[FreedomFuture]:
-        """
-        Get multiple future predictions with optional filtering and ordering
-
-        Args:
-            db: Database session
-            filters: List of filter conditions [{"field": str, "op": str, "value": Any}]
-            order_by: Field to order by
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-
-        Returns:
-            List of future predictions matching the criteria
-        """
-        query = db.query(self.model)
-
-        # Apply filters if provided
-        if filters:
-            filter_conditions = []
-            for filter_dict in filters:
-                field = getattr(self.model, filter_dict["field"])
-                op = filter_dict["op"]
-                value = filter_dict["value"]
-
-                if op == "==":
-                    filter_conditions.append(field == value)
-                elif op == "!=":
-                    filter_conditions.append(field != value)
-                elif op == ">":
-                    filter_conditions.append(field > value)
-                elif op == ">=":
-                    filter_conditions.append(field >= value)
-                elif op == "<":
-                    filter_conditions.append(field < value)
-                elif op == "<=":
-                    filter_conditions.append(field <= value)
-
-            if filter_conditions:
-                query = query.filter(and_(*filter_conditions))
-
-        # Apply ordering if provided
-        if order_by:
-            if order_by.startswith("-"):
-                query = query.order_by(desc(getattr(self.model, order_by[1:])))
-            else:
-                query = query.order_by(getattr(self.model, order_by))
-
-        # Apply pagination
-        if skip:
-            query = query.offset(skip)
-        if limit:
-            query = query.limit(limit)
-
-        return query.all()
-
-    def get_by_date_range(
-        self,
-        db: Session,
-        *,
-        start_date: date,
-        end_date: date,
-        paid: Optional[bool] = None
-    ) -> List[FreedomFuture]:
-        """
-        Get future predictions within a date range
-
-        Args:
-            db: Database session
-            start_date: Start date of range
-            end_date: End date of range
-            paid: Optional filter for paid status
-
-        Returns:
-            List of future predictions within the date range
-        """
-        query = db.query(self.model).filter(
-            and_(self.model.Date >= start_date, self.model.Date <= end_date)
-        )
-
-        if paid is not None:
-            query = query.filter(self.model.Paid == paid)
-
-        return query.order_by(self.model.Date).all()
 
     def get_unpaid(
         self,
@@ -131,25 +43,62 @@ class CRUDFuture(CRUDBase[FreedomFuture, FutureCreate, FutureUpdate]):
         Returns:
             List of unpaid future predictions
         """
-        # Start with base query
-        query = db.query(self.model)
-        
-        # Filter for unpaid records
-        query = query.filter(self.model.Paid == False)
+        try:
+            logger.debug("Starting get_unpaid operation")
+            logger.debug(f"Session ID: {id(db)}")
+            logger.debug(f"Session is active: {db.is_active}")
+            
+            # First verify the database connection
+            try:
+                db.execute(text("SELECT 1"))
+                logger.debug("Database connection verified")
+            except Exception as e:
+                logger.error(f"Database connection test failed: {str(e)}")
+                raise
 
-        if start_date:
-            query = query.filter(self.model.Date >= start_date)
-        
-        # Apply ordering first
-        query = query.order_by(self.model.Date)
-        
-        # Then apply pagination
-        if skip:
-            query = query.offset(skip)
-        if limit:
-            query = query.limit(limit)
+            # Start with base query
+            query = db.query(self.model)
+            logger.debug(f"Base query created: {str(query)}")
+            
+            # Filter for unpaid records
+            query = query.filter(self.model.Paid == 'false')
+            logger.debug(f"Added Paid filter: {str(query)}")
+            
+            # Apply ordering
+            query = query.order_by(self.model.Date)
+            logger.debug(f"Added ordering: {str(query)}")
+            
+            # Apply limit
+            if limit:
+                query = query.limit(limit)
+                logger.debug(f"Added limit {limit}: {str(query)}")
 
-        return query.all()
+            # Execute query and get results
+            logger.debug("Executing query...")
+            results = query.all()
+            logger.debug(f"Query executed, found {len(results)} results")
+            
+            # Log each result
+            for result in results:
+                logger.debug(
+                    f"Result: TrNo={result.TrNo}, "
+                    f"Date={result.Date}, "
+                    f"Description={result.Description}, "
+                    f"Amount={result.Amount}, "
+                    f"Paid={result.Paid}"
+                )
+
+            # Verify result types
+            if results:
+                first_result = results[0]
+                logger.debug(f"First result type: {type(first_result)}")
+                logger.debug(f"First result dict: {first_result.__dict__}")
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error in get_unpaid: {str(e)}", exc_info=True)
+            raise
 
     def mark_as_paid(
         self, db: Session, *, id: int, paid: bool = True
@@ -167,7 +116,8 @@ class CRUDFuture(CRUDBase[FreedomFuture, FutureCreate, FutureUpdate]):
         """
         obj = db.query(self.model).filter(self.model.TrNo == id).first()
         if obj:
-            obj.Paid = paid
+            # Convert boolean to string for BooleanStr type
+            obj.Paid = str(paid).lower()
             db.commit()
             db.refresh(obj)
         return obj
