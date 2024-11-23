@@ -1,6 +1,35 @@
 import { ColumnDef } from "@tanstack/react-table";
-import { Transaction, Account, FuturePrediction } from "../types/models";
-import { formatAmount, formatDate, formatBoolean } from "./formatters";
+import { Account, FuturePrediction, Transaction } from "../types/models";
+
+/**
+ * Formats a number as Indian currency with 2 decimal places
+ * @param value - The number to format
+ * @returns Formatted string with ₹ symbol and 2 decimal places
+ */
+const formatCurrency = (value: unknown): string => {
+  if (typeof value === 'number' && !isNaN(value)) {
+    return `₹${value.toFixed(2)}`;
+  }
+  if (typeof value === 'string') {
+    const num = parseFloat(value);
+    if (!isNaN(num)) {
+      return `₹${num.toFixed(2)}`;
+    }
+  }
+  return '-';
+};
+
+/**
+ * Formats a date string to localized date string
+ * @param value - The date string to format
+ * @returns Formatted date string
+ */
+const formatDate = (value: unknown): string => {
+  if (typeof value === 'string') {
+    return new Date(value).toLocaleDateString();
+  }
+  return '-';
+};
 
 /**
  * Column definitions for the transactions table
@@ -14,7 +43,7 @@ export const transactionColumns: ColumnDef<Transaction>[] = [
   { 
     accessorKey: "Date", 
     header: "Date",
-    cell: (info) => formatDate(info.getValue() as string)
+    cell: (info) => formatDate(info.getValue()),
   },
   { 
     accessorKey: "Description", 
@@ -23,7 +52,7 @@ export const transactionColumns: ColumnDef<Transaction>[] = [
   { 
     accessorKey: "Amount", 
     header: "Amount",
-    cell: (info) => formatAmount(info.getValue() as number),
+    cell: (info) => formatCurrency(info.getValue()),
     sortingFn: "alphanumeric"
   },
   { 
@@ -45,7 +74,7 @@ export const transactionColumns: ColumnDef<Transaction>[] = [
   { 
     accessorKey: "ZohoMatch", 
     header: "Zoho Match",
-    cell: (info) => formatBoolean(info.getValue() as boolean)
+    cell: (info) => (info.getValue() as boolean) ? "Yes" : "No"
   },
 ];
 
@@ -73,7 +102,7 @@ export const accountColumns: ColumnDef<Account>[] = [
   { 
     accessorKey: "Balance", 
     header: "Balance",
-    cell: (info) => formatAmount(info.getValue() as number),
+    cell: (info) => formatCurrency(info.getValue()),
     sortingFn: "alphanumeric"
   },
   { 
@@ -88,7 +117,7 @@ export const accountColumns: ColumnDef<Account>[] = [
   { 
     accessorKey: "NextDueDate", 
     header: "Next Due Date",
-    cell: (info) => formatDate(info.getValue() as string)
+    cell: (info) => formatDate(info.getValue()),
   },
   { 
     accessorKey: "Bank", 
@@ -108,7 +137,7 @@ export const futureColumns: ColumnDef<FuturePrediction>[] = [
   { 
     accessorKey: "Date", 
     header: "Date",
-    cell: (info) => formatDate(info.getValue() as string)
+    cell: (info) => formatDate(info.getValue()),
   },
   { 
     accessorKey: "Description", 
@@ -117,7 +146,7 @@ export const futureColumns: ColumnDef<FuturePrediction>[] = [
   { 
     accessorKey: "Amount", 
     header: "Amount",
-    cell: (info) => formatAmount(info.getValue() as number),
+    cell: (info) => formatCurrency(info.getValue()),
     sortingFn: "alphanumeric"
   },
   { 
@@ -139,6 +168,6 @@ export const futureColumns: ColumnDef<FuturePrediction>[] = [
   { 
     accessorKey: "Paid", 
     header: "Paid",
-    cell: (info) => formatBoolean(info.getValue() as boolean)
+    cell: (info) => (info.getValue() as boolean) ? "Yes" : "No"
   },
 ];

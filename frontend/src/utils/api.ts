@@ -44,27 +44,46 @@ type EmptyRequest = Record<string, never>;
  * Base API client class with common HTTP methods
  */
 class APIClient {
-  private static async handleResponse<T>(response: Response): Promise<APIResponse<T>> {
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'An error occurred' }));
-      throw new APIError(response.status, error.message || 'An error occurred');
-    }
-
+  /**
+   * Handles API response and extracts data
+   */
+  private static async handleResponse<T>(response: Response): Promise<T> {
     const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
+    
+    try {
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'An error occurred' }));
+        throw new APIError(response.status, errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new APIError(response.status, 'Invalid content type: expected JSON');
+      }
+
       const jsonData = await response.json();
+
       // If the response is already in the correct format, return it
       if (jsonData.data !== undefined) {
-        return jsonData as APIResponse<T>;
+        return jsonData.data;
       }
-      // Otherwise, wrap the data in our response format
-      return { data: jsonData as T };
+
+      // Otherwise, return the data directly
+      return jsonData;
+    } catch (error) {
+      console.error('API Response Error:', {
+        status: response.status,
+        statusText: response.statusText,
+        contentType,
+        error
+      });
+      throw error;
     }
-    
-    throw new APIError(response.status, 'Invalid response format');
   }
 
-  static async get<T>(endpoint: string, params?: Record<string, string>): Promise<APIResponse<T>> {
+  /**
+   * Performs GET request
+   */
+  static async get<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
     try {
       const url = new URL(`${API_BASE_URL}${endpoint}`);
       if (params) {
@@ -73,10 +92,9 @@ class APIClient {
         });
       }
 
-      console.log(`Fetching from: ${url.toString()}`);
+      console.log(`GET Request to: ${url.toString()}`);
       const response = await fetch(url.toString(), {
         headers: {
-          'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
         credentials: 'include',
@@ -85,12 +103,16 @@ class APIClient {
       return this.handleResponse<T>(response);
     } catch (error) {
       console.error('API Request failed:', error);
-      throw new APIError(500, error instanceof Error ? error.message : 'Network request failed');
+      throw error instanceof APIError ? error : new APIError(500, 'Network request failed');
     }
   }
 
-  static async post<T, D>(endpoint: string, data: D): Promise<APIResponse<T>> {
+  /**
+   * Performs POST request
+   */
+  static async post<T, D>(endpoint: string, data: D): Promise<T> {
     try {
+      console.log(`POST Request to: ${API_BASE_URL}${endpoint}`);
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: {
@@ -104,12 +126,16 @@ class APIClient {
       return this.handleResponse<T>(response);
     } catch (error) {
       console.error('API Request failed:', error);
-      throw new APIError(500, error instanceof Error ? error.message : 'Network request failed');
+      throw error instanceof APIError ? error : new APIError(500, 'Network request failed');
     }
   }
 
-  static async put<T, D>(endpoint: string, data: D): Promise<APIResponse<T>> {
+  /**
+   * Performs PUT request
+   */
+  static async put<T, D>(endpoint: string, data: D): Promise<T> {
     try {
+      console.log(`PUT Request to: ${API_BASE_URL}${endpoint}`);
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'PUT',
         headers: {
@@ -123,16 +149,19 @@ class APIClient {
       return this.handleResponse<T>(response);
     } catch (error) {
       console.error('API Request failed:', error);
-      throw new APIError(500, error instanceof Error ? error.message : 'Network request failed');
+      throw error instanceof APIError ? error : new APIError(500, 'Network request failed');
     }
   }
 
-  static async delete<T>(endpoint: string): Promise<APIResponse<T>> {
+  /**
+   * Performs DELETE request
+   */
+  static async delete<T>(endpoint: string): Promise<T> {
     try {
+      console.log(`DELETE Request to: ${API_BASE_URL}${endpoint}`);
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
         credentials: 'include',
@@ -141,7 +170,7 @@ class APIClient {
       return this.handleResponse<T>(response);
     } catch (error) {
       console.error('API Request failed:', error);
-      throw new APIError(500, error instanceof Error ? error.message : 'Network request failed');
+      throw error instanceof APIError ? error : new APIError(500, 'Network request failed');
     }
   }
 }
@@ -226,5 +255,5 @@ export const FutureAPI = {
  */
 export const NotificationsAPI = {
   sendPaymentNotifications: () => 
-    APIClient.post<{ status: string, message: string }, EmptyRequest>('/notifications/send-payment-notifications/', {}),
+    APIClient.post<{ message: string }, EmptyRequest>('/notifications/send-payment-notifications/', {}),
 };

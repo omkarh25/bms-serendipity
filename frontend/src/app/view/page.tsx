@@ -24,32 +24,68 @@ export default function ViewPage() {
     setError(null);
 
     try {
-      const [transactionsRes, accountsRes, futureRes] = await Promise.all([
+      // Using Promise.allSettled to handle partial failures
+      const results = await Promise.allSettled([
         TransactionsAPI.getAll(),
         AccountsAPI.getAll(),
         FutureAPI.getAll(),
       ]);
 
-      console.log('Accounts data:', accountsRes.data); // Debug log
-      setTransactions(transactionsRes.data);
-      setAccounts(accountsRes.data);
-      setFuturePredictions(futureRes.data);
+      // Process results and handle any individual failures
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          switch(index) {
+            case 0:
+              setTransactions(result.value as Transaction[]);
+              break;
+            case 1:
+              console.log('Accounts data:', result.value);
+              setAccounts(result.value as Account[]);
+              break;
+            case 2:
+              setFuturePredictions(result.value as FuturePrediction[]);
+              break;
+          }
+        } else {
+          console.error(`Error fetching data for index ${index}:`, result.reason);
+          // Set error message for the failed request
+          setError(result.reason?.message || "Failed to fetch some data");
+        }
+      });
+
     } catch (err) {
-      console.error('Error fetching data:', err); // Debug log
-      setError(err instanceof Error ? err.message : "An error occurred");
+      console.error('Error fetching data:', err);
+      setError(err instanceof Error ? err.message : "An error occurred while fetching data");
     } finally {
       setLoading(false);
     }
   };
 
-  const calculateTotalBalance = () => {
-    return accounts.reduce((total, account) => {
-      console.log('Account:', account); // Debug log
-      return total + (account.Balance || 0);
-    }, 0);
+  const parseBalance = (balance: number | string): number => {
+    if (typeof balance === 'number') return balance;
+    // Remove commas and convert to float
+    const cleanValue = balance.replace(/,/g, '');
+    const parsedValue = parseFloat(cleanValue);
+    return isNaN(parsedValue) ? 0 : parsedValue;
   };
 
-  const calculateMonthlyExpenses = () => {
+  const formatCurrency = (amount: number): string => {
+    return `₹${amount.toFixed(2)}`;
+  };
+
+  const calculateTotalBalance = (): number => {
+    if (!accounts || accounts.length === 0) return 0;
+    const total = accounts.reduce((total, account) => {
+      const balance = parseBalance(account.Balance);
+      console.log(`Account ${account.AccountName}: ${balance}`);
+      return total + balance;
+    }, 0);
+    console.log('Total balance:', total);
+    return total;
+  };
+
+  const calculateMonthlyExpenses = (): number => {
+    if (!transactions || transactions.length === 0) return 0;
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
     return transactions
@@ -61,15 +97,16 @@ export default function ViewPage() {
           t.Amount < 0
         );
       })
-      .reduce((total, t) => total + Math.abs(t.Amount), 0);
+      .reduce((total, t) => total + Math.abs(parseBalance(t.Amount)), 0);
   };
 
-  const calculateUpcomingPayments = () => {
+  const calculateUpcomingPayments = (): number => {
+    if (!futurePredictions || futurePredictions.length === 0) return 0;
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
     return futurePredictions
       .filter((f) => !f.Paid && new Date(f.Date) <= nextMonth)
-      .reduce((total, f) => total + Math.abs(f.Amount), 0);
+      .reduce((total, f) => total + Math.abs(parseBalance(f.Amount)), 0);
   };
 
   const renderCAView = () => (
@@ -79,11 +116,11 @@ export default function ViewPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-gray-50 p-4 rounded-md">
             <h3 className="text-sm font-medium text-gray-500">Total Assets</h3>
-            <p className="text-2xl font-bold text-green-600">₹{calculateTotalBalance().toFixed(2)}</p>
+            <p className="text-2xl font-bold text-green-600">{formatCurrency(calculateTotalBalance())}</p>
           </div>
           <div className="bg-gray-50 p-4 rounded-md">
             <h3 className="text-sm font-medium text-gray-500">Monthly Expenses</h3>
-            <p className="text-2xl font-bold text-red-600">₹{calculateMonthlyExpenses().toFixed(2)}</p>
+            <p className="text-2xl font-bold text-red-600">{formatCurrency(calculateMonthlyExpenses())}</p>
           </div>
           <div className="bg-gray-50 p-4 rounded-md">
             <h3 className="text-sm font-medium text-gray-500">Account Types</h3>
@@ -118,11 +155,11 @@ export default function ViewPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-gray-50 p-4 rounded-md">
             <h3 className="text-sm font-medium text-gray-500">Current Month Expenses</h3>
-            <p className="text-2xl font-bold text-red-600">₹{calculateMonthlyExpenses().toFixed(2)}</p>
+            <p className="text-2xl font-bold text-red-600">{formatCurrency(calculateMonthlyExpenses())}</p>
           </div>
           <div className="bg-gray-50 p-4 rounded-md">
             <h3 className="text-sm font-medium text-gray-500">Upcoming Payments</h3>
-            <p className="text-2xl font-bold text-yellow-600">₹{calculateUpcomingPayments().toFixed(2)}</p>
+            <p className="text-2xl font-bold text-yellow-600">{formatCurrency(calculateUpcomingPayments())}</p>
           </div>
           <div className="bg-gray-50 p-4 rounded-md">
             <h3 className="text-sm font-medium text-gray-500">Active Accounts</h3>
@@ -136,15 +173,15 @@ export default function ViewPage() {
         <div className="space-y-4">
           {Object.entries(
             transactions.reduce((acc, transaction) => {
-              if (transaction.Amount < 0) {
-                acc[transaction.Department] = (acc[transaction.Department] || 0) + Math.abs(transaction.Amount);
+              if (parseBalance(transaction.Amount) < 0) {
+                acc[transaction.Department] = (acc[transaction.Department] || 0) + Math.abs(parseBalance(transaction.Amount));
               }
               return acc;
             }, {} as Record<string, number>)
           ).map(([department, amount]) => (
             <div key={department} className="flex justify-between items-center">
               <span className="text-gray-600">{department}</span>
-              <span className="text-gray-900 font-medium">₹{amount.toFixed(2)}</span>
+              <span className="text-gray-900 font-medium">{formatCurrency(amount)}</span>
             </div>
           ))}
         </div>
@@ -159,15 +196,15 @@ export default function ViewPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-gray-50 p-4 rounded-md">
             <h3 className="text-sm font-medium text-gray-500">Total Balance</h3>
-            <p className="text-2xl font-bold text-green-600">₹{calculateTotalBalance().toFixed(2)}</p>
+            <p className="text-2xl font-bold text-green-600">{formatCurrency(calculateTotalBalance())}</p>
           </div>
           <div className="bg-gray-50 p-4 rounded-md">
             <h3 className="text-sm font-medium text-gray-500">Monthly Expenses</h3>
-            <p className="text-2xl font-bold text-red-600">₹{calculateMonthlyExpenses().toFixed(2)}</p>
+            <p className="text-2xl font-bold text-red-600">{formatCurrency(calculateMonthlyExpenses())}</p>
           </div>
           <div className="bg-gray-50 p-4 rounded-md">
             <h3 className="text-sm font-medium text-gray-500">Upcoming Payments</h3>
-            <p className="text-2xl font-bold text-yellow-600">₹{calculateUpcomingPayments().toFixed(2)}</p>
+            <p className="text-2xl font-bold text-yellow-600">{formatCurrency(calculateUpcomingPayments())}</p>
           </div>
         </div>
       </div>
@@ -178,14 +215,15 @@ export default function ViewPage() {
           <div className="space-y-4">
             {Object.entries(
               transactions.reduce((acc, transaction) => {
-                acc[transaction.Department] = (acc[transaction.Department] || 0) + transaction.Amount;
+                const amount = parseBalance(transaction.Amount);
+                acc[transaction.Department] = (acc[transaction.Department] || 0) + amount;
                 return acc;
               }, {} as Record<string, number>)
             ).map(([department, balance]) => (
               <div key={department} className="flex justify-between items-center">
                 <span className="text-gray-600">{department}</span>
                 <span className={`font-medium ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ₹{balance.toFixed(2)}
+                  {formatCurrency(balance)}
                 </span>
               </div>
             ))}
@@ -197,14 +235,15 @@ export default function ViewPage() {
           <div className="space-y-4">
             {Object.entries(
               accounts.reduce((acc, account) => {
-                acc[account.Type] = (acc[account.Type] || 0) + account.Balance;
+                const balance = parseBalance(account.Balance);
+                acc[account.Type] = (acc[account.Type] || 0) + balance;
                 return acc;
               }, {} as Record<string, number>)
             ).map(([type, balance]) => (
               <div key={type} className="flex justify-between items-center">
                 <span className="text-gray-600">{type}</span>
                 <span className={`font-medium ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ₹{balance.toFixed(2)}
+                  {formatCurrency(balance)}
                 </span>
               </div>
             ))}

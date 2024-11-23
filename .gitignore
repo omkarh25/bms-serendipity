@@ -81,3 +81,6 @@ logs/
 # Tanstack Table
 node_modules/
 
+# telegram session
+*.session
+

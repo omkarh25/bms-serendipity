@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { TransactionsAPI, AccountsAPI, FutureAPI, NotificationsAPI } from "@/utils/api";
+import { TransactionsAPI, AccountsAPI, FutureAPI, NotificationsAPI } from "../../utils/api";
 import {
   TransactionCreate,
   AccountCreate,
   FuturePredictionCreate,
-} from "@/types/models";
-import { TransactionForm } from "@/components/forms/TransactionForm";
-import { AccountForm } from "@/components/forms/AccountForm";
-import { FutureForm } from "@/components/forms/FutureForm";
+} from "../../types/models";
+import { TransactionForm } from "../../components/forms/TransactionForm";
+import { AccountForm } from "../../components/forms/AccountForm";
+import { FutureForm } from "../../components/forms/FutureForm";
 
 type ActionType = "transaction" | "account" | "future" | null;
 
@@ -54,7 +54,7 @@ export default function ControllerPage() {
       setSuccess(null);
 
       const response = await NotificationsAPI.sendPaymentNotifications();
-      setSuccess(response.data.message);
+      setSuccess(response.message); // Fixed: Removed .data since handleResponse already unwraps it
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send notifications");
     } finally {
