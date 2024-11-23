@@ -102,10 +102,10 @@ export default function ViewPage() {
 
   const calculateUpcomingPayments = (): number => {
     if (!futurePredictions || futurePredictions.length === 0) return 0;
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    const today = new Date();
+    // Filter only unpaid future payments from today onwards
     return futurePredictions
-      .filter((f) => !f.Paid && new Date(f.Date) <= nextMonth)
+      .filter((f) => !f.Paid && new Date(f.Date) >= today)
       .reduce((total, f) => total + Math.abs(parseBalance(f.Amount)), 0);
   };
 

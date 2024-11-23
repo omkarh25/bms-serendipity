@@ -1,9 +1,24 @@
 from sqlalchemy import Column, Integer, String, Date, Numeric, Boolean, ForeignKey, Enum, DateTime
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.types import TypeDecorator
 import enum
 from datetime import datetime
 
 Base = declarative_base()
+
+class BooleanStr(TypeDecorator):
+    """Custom type to handle boolean values stored as 'true'/'false' strings."""
+    impl = String
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return 'false'
+        return str(value).lower()
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return False
+        return value.lower() == 'true'
 
 class PaymentMode(str, enum.Enum):
     Cash = "Cash"
@@ -104,7 +119,7 @@ class FreedomFuture(Base):
     Department = Column(Enum(Department), nullable=False, doc="Internal department names")
     Comments = Column(String, nullable=True, doc="Detailed descriptions of forecasted transaction")
     Category = Column(Enum(Category), nullable=False, doc="Transaction category type")
-    Paid = Column(Boolean, nullable=False, default=False, doc="Indicates if forecasted transaction is paid")
+    Paid = Column(BooleanStr, nullable=False, default='false', doc="Indicates if forecasted transaction is paid")
 
     def __repr__(self):
         return f"<FreedomFuture(TrNo={self.TrNo}, Date={self.Date}, Amount={self.Amount}, Paid={self.Paid})>"

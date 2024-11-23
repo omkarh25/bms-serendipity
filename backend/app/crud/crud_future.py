@@ -111,6 +111,46 @@ class CRUDFuture(CRUDBase[FreedomFuture, FutureCreate, FutureUpdate]):
 
         return query.order_by(self.model.Date).all()
 
+    def get_unpaid(
+        self,
+        db: Session,
+        *,
+        skip: int = 0,
+        limit: Optional[int] = None,
+        start_date: Optional[date] = None
+    ) -> List[FreedomFuture]:
+        """
+        Get unpaid future predictions
+
+        Args:
+            db: Database session
+            skip: Number of records to skip
+            limit: Maximum number of records to return
+            start_date: Optional start date to filter from
+
+        Returns:
+            List of unpaid future predictions
+        """
+        # Start with base query
+        query = db.query(self.model)
+        
+        # Filter for unpaid records
+        query = query.filter(self.model.Paid == False)
+
+        if start_date:
+            query = query.filter(self.model.Date >= start_date)
+        
+        # Apply ordering first
+        query = query.order_by(self.model.Date)
+        
+        # Then apply pagination
+        if skip:
+            query = query.offset(skip)
+        if limit:
+            query = query.limit(limit)
+
+        return query.all()
+
     def mark_as_paid(
         self, db: Session, *, id: int, paid: bool = True
     ) -> Optional[FreedomFuture]:

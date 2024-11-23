@@ -2,48 +2,18 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from telethon import TelegramClient
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List
 import os
 
 from app.api import deps
 from app.core.config import settings
+from app.crud.crud_future import crud_future
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# Dummy data for testing
-DUMMY_PAYMENTS = [
-    {
-        "Date": date(2024, 12, 2),
-        "Description": "Test Payment 1",
-        "Amount": 5000.00,
-        "PaymentMode": "ICICI_Current",
-        "Department": "Serendipity",
-        "Category": "EMI",
-        "Comments": "Test comment 1"
-    },
-    {
-        "Date": date(2024, 12, 5),
-        "Description": "Test Payment 2",
-        "Amount": 10000.00,
-        "PaymentMode": "SBI",
-        "Department": "Serendipity",
-        "Category": "Maintenance",
-        "Comments": "Test comment 2"
-    },
-    {
-        "Date": date(2024, 12, 10),
-        "Description": "Test Payment 3",
-        "Amount": 15000.00,
-        "PaymentMode": "ICICI_Current",
-        "Department": "Dhoom_Studios",
-        "Category": "Salaries",
-        "Comments": "Test comment 3"
-    }
-]
 
 async def get_telegram_client():
     """Initialize and return Telegram client with credentials from env."""
@@ -78,17 +48,17 @@ async def get_telegram_client():
             detail=f"Failed to initialize Telegram client: {str(e)}"
         )
 
-def format_payment_message(payment: dict) -> str:
+def format_payment_message(payment) -> str:
     """Format payment details into a readable message."""
     return (
         f"🔔 Upcoming Payment Alert!\n\n"
-        f"📅 Date: {payment['Date']}\n"
-        f"📝 Description: {payment['Description']}\n"
-        f"💰 Amount: ₹{payment['Amount']:,.2f}\n"
-        f"💳 Payment Mode: {payment['PaymentMode']}\n"
-        f"🏢 Department: {payment['Department']}\n"
-        f"📋 Category: {payment['Category']}\n"
-        f"💭 Comments: {payment['Comments'] or 'N/A'}"
+        f"📅 Date: {payment.Date}\n"
+        f"📝 Description: {payment.Description}\n"
+        f"💰 Amount: ₹{abs(payment.Amount):,.2f}\n"
+        f"💳 Payment Mode: {payment.PaymentMode}\n"
+        f"🏢 Department: {payment.Department}\n"
+        f"📋 Category: {payment.Category}\n"
+        f"💭 Comments: {payment.Comments or 'N/A'}"
     )
 
 @router.post("/send-payment-notifications", response_model=dict)
@@ -97,7 +67,7 @@ async def send_payment_notifications(
 ) -> dict:
     """
     Send notifications for next 5 upcoming payments to Telegram channel.
-    Currently using dummy data for testing.
+    Fetches real data from the database.
     
     Returns:
         dict: Message indicating success or failure
@@ -106,15 +76,34 @@ async def send_payment_notifications(
     try:
         logger.info("Starting payment notification process...")
         
+        # Get upcoming payments for next 30 days
+        today = date.today()
+        end_date = today + timedelta(days=30)
+        
+        # Fetch unpaid future payments within date range
+        upcoming_payments = crud_future.get_by_date_range(
+            db,
+            start_date=today,
+            end_date=end_date,
+            paid=False  # This will be converted to "No" in crud_future
+        )
+        
+        if not upcoming_payments:
+            logger.warning("No upcoming payments found")
+            return {"message": "No upcoming payments found for notification"}
+        
+        # Sort by date and take first 5
+        upcoming_payments = sorted(upcoming_payments, key=lambda x: x.Date)[:5]
+        
         # Initialize Telegram client
         client = await get_telegram_client()
         
-        logger.info(f"Sending notifications for {len(DUMMY_PAYMENTS)} payments...")
+        logger.info(f"Sending notifications for {len(upcoming_payments)} payments...")
         
         # Send notifications for each payment
-        for i, payment in enumerate(DUMMY_PAYMENTS, 1):
+        for i, payment in enumerate(upcoming_payments, 1):
             message = format_payment_message(payment)
-            logger.debug(f"Sending notification {i}/{len(DUMMY_PAYMENTS)}")
+            logger.debug(f"Sending notification {i}/{len(upcoming_payments)}")
             await client.send_message(
                 settings.TELEGRAM_CHANNEL_ID,
                 message
@@ -123,7 +112,7 @@ async def send_payment_notifications(
         
         logger.info("All notifications sent successfully")
         return {
-            "message": f"Successfully sent notifications for {len(DUMMY_PAYMENTS)} upcoming payments"
+            "message": f"Successfully sent notifications for {len(upcoming_payments)} upcoming payments"
         }
             
     except Exception as e:

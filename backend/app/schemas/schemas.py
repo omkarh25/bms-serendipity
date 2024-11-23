@@ -97,7 +97,7 @@ class FutureBase(BaseModel):
     Department: Department
     Comments: Optional[str] = None
     Category: Category
-    Paid: Optional[bool] = False
+    Paid: bool = False
 
 class FutureCreate(FutureBase):
     """Schema for creating a future prediction."""

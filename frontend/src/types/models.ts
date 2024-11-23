@@ -79,7 +79,7 @@ export interface FuturePrediction extends Record<string, unknown> {
   Department: Department;
   Comments?: string;
   Category: Category;
-  Paid: boolean;
+  Paid: boolean;  // Updated to use boolean since API returns false/true
 }
 
 // Form interfaces for creating new records
@@ -117,7 +117,7 @@ export interface FuturePredictionFormData {
   Department?: Department;
   Comments?: string;
   Category?: Category;
-  Paid?: boolean;
+  Paid?: boolean;  // Updated to use boolean
 }
 
 // Type for creating a new transaction
