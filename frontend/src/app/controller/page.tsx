@@ -1,19 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { TransactionsAPI, AccountsAPI, FutureAPI } from "@/utils/api";
+import { TransactionsAPI, AccountsAPI, FutureAPI, NotificationsAPI } from "@/utils/api";
 import {
-  PaymentMode,
-  Department,
-  Category,
-  AccountType,
   TransactionCreate,
   AccountCreate,
   FuturePredictionCreate,
-  TransactionFormData,
-  AccountFormData,
-  FuturePredictionFormData,
 } from "@/types/models";
+import { TransactionForm } from "@/components/forms/TransactionForm";
+import { AccountForm } from "@/components/forms/AccountForm";
+import { FutureForm } from "@/components/forms/FutureForm";
 
 type ActionType = "transaction" | "account" | "future" | null;
 
@@ -51,436 +47,29 @@ export default function ControllerPage() {
     }
   };
 
-  const TransactionForm = () => {
-    const [formData, setFormData] = useState<TransactionFormData>({
-      zoho_match: false,
-    });
+  const handleSendNotifications = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
 
-    const handleSubmitTransaction = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (
-        formData.date &&
-        formData.description &&
-        formData.amount &&
-        formData.payment_mode &&
-        formData.acc_id &&
-        formData.department &&
-        formData.category
-      ) {
-        handleSubmit(formData as TransactionCreate);
-      }
-    };
-
-    return (
-      <form onSubmit={handleSubmitTransaction} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Date</label>
-          <input
-            type="date"
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Description</label>
-          <input
-            type="text"
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Amount</label>
-          <input
-            type="number"
-            required
-            step="0.01"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Payment Mode</label>
-          <select
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, payment_mode: e.target.value as PaymentMode })}
-          >
-            <option value="">Select Payment Mode</option>
-            {Object.values(PaymentMode).map((mode) => (
-              <option key={mode} value={mode}>
-                {mode}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Account ID</label>
-          <input
-            type="text"
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, acc_id: e.target.value })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Department</label>
-          <select
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, department: e.target.value as Department })}
-          >
-            <option value="">Select Department</option>
-            {Object.values(Department).map((dept) => (
-              <option key={dept} value={dept}>
-                {dept}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Category</label>
-          <select
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, category: e.target.value as Category })}
-          >
-            <option value="">Select Category</option>
-            {Object.values(Category).map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Comments</label>
-          <textarea
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
-          />
-        </div>
-
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            checked={formData.zoho_match}
-            onChange={(e) => setFormData({ ...formData, zoho_match: e.target.checked })}
-          />
-          <label className="ml-2 block text-sm text-gray-900">Zoho Match</label>
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50"
-        >
-          {loading ? "Creating..." : "Create Transaction"}
-        </button>
-      </form>
-    );
-  };
-
-  const AccountForm = () => {
-    const [formData, setFormData] = useState<AccountFormData>({});
-
-    const handleSubmitAccount = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (
-        formData.account_name &&
-        formData.type &&
-        formData.cc_id &&
-        formData.balance &&
-        formData.int_rate &&
-        formData.next_due_date &&
-        formData.bank
-      ) {
-        handleSubmit(formData as AccountCreate);
-      }
-    };
-
-    return (
-      <form onSubmit={handleSubmitAccount} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Account Name</label>
-          <input
-            type="text"
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, account_name: e.target.value })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Type</label>
-          <select
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, type: e.target.value as AccountType })}
-          >
-            <option value="">Select Account Type</option>
-            {Object.values(AccountType).map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">CC ID</label>
-          <input
-            type="text"
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, cc_id: e.target.value })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Balance</label>
-          <input
-            type="number"
-            required
-            step="0.01"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, balance: parseFloat(e.target.value) })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Interest Rate (%)</label>
-          <input
-            type="number"
-            required
-            step="0.01"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, int_rate: parseFloat(e.target.value) })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Next Due Date</label>
-          <input
-            type="date"
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, next_due_date: e.target.value })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Bank</label>
-          <select
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, bank: e.target.value as PaymentMode })}
-          >
-            <option value="">Select Bank</option>
-            {Object.values(PaymentMode).map((mode) => (
-              <option key={mode} value={mode}>
-                {mode}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Tenure (months)</label>
-          <input
-            type="number"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, tenure: parseInt(e.target.value) })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">EMI Amount</label>
-          <input
-            type="number"
-            step="0.01"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, emi_amt: parseFloat(e.target.value) })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Comments</label>
-          <textarea
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50"
-        >
-          {loading ? "Creating..." : "Create Account"}
-        </button>
-      </form>
-    );
-  };
-
-  const FutureForm = () => {
-    const [formData, setFormData] = useState<FuturePredictionFormData>({
-      paid: false,
-    });
-
-    const handleSubmitFuture = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (
-        formData.date &&
-        formData.description &&
-        formData.amount &&
-        formData.payment_mode &&
-        formData.acc_id &&
-        formData.department &&
-        formData.category
-      ) {
-        handleSubmit(formData as FuturePredictionCreate);
-      }
-    };
-
-    return (
-      <form onSubmit={handleSubmitFuture} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Date</label>
-          <input
-            type="date"
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Description</label>
-          <input
-            type="text"
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Amount</label>
-          <input
-            type="number"
-            required
-            step="0.01"
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Payment Mode</label>
-          <select
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, payment_mode: e.target.value as PaymentMode })}
-          >
-            <option value="">Select Payment Mode</option>
-            {Object.values(PaymentMode).map((mode) => (
-              <option key={mode} value={mode}>
-                {mode}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Account ID</label>
-          <input
-            type="text"
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, acc_id: e.target.value })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Department</label>
-          <select
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, department: e.target.value as Department })}
-          >
-            <option value="">Select Department</option>
-            {Object.values(Department).map((dept) => (
-              <option key={dept} value={dept}>
-                {dept}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Category</label>
-          <select
-            required
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, category: e.target.value as Category })}
-          >
-            <option value="">Select Category</option>
-            {Object.values(Category).map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700">Comments</label>
-          <textarea
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-            onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
-          />
-        </div>
-
-        <div className="flex items-center">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            checked={formData.paid}
-            onChange={(e) => setFormData({ ...formData, paid: e.target.checked })}
-          />
-          <label className="ml-2 block text-sm text-gray-900">Paid</label>
-        </div>
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50"
-        >
-          {loading ? "Creating..." : "Create Future Prediction"}
-        </button>
-      </form>
-    );
+      const response = await NotificationsAPI.sendPaymentNotifications();
+      setSuccess(response.data.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send notifications");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderForm = () => {
     switch (selectedAction) {
       case "transaction":
-        return <TransactionForm />;
+        return <TransactionForm loading={loading} onSubmit={handleSubmit} />;
       case "account":
-        return <AccountForm />;
+        return <AccountForm loading={loading} onSubmit={handleSubmit} />;
       case "future":
-        return <FutureForm />;
+        return <FutureForm loading={loading} onSubmit={handleSubmit} />;
       default:
         return null;
     }
@@ -509,6 +98,13 @@ export default function ControllerPage() {
               className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
             >
               Add Future Entry
+            </button>
+            <button
+              onClick={handleSendNotifications}
+              disabled={loading}
+              className="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:opacity-50"
+            >
+              {loading ? "Sending..." : "Send Payment Notifications"}
             </button>
           </div>
         )}

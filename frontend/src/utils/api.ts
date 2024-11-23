@@ -220,3 +220,11 @@ export const FutureAPI = {
   getByDateRange: (startDate: string, endDate: string) => 
     APIClient.get<FuturePrediction[]>(`/future/date-range/?start_date=${startDate}&end_date=${endDate}`),
 };
+
+/**
+ * Notifications API endpoints
+ */
+export const NotificationsAPI = {
+  sendPaymentNotifications: () => 
+    APIClient.post<{ status: string, message: string }, EmptyRequest>('/notifications/send-payment-notifications/', {}),
+};
