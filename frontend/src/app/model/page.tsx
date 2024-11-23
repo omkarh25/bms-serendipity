@@ -1,125 +1,276 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ModelTable } from "@/components/tables/ModelTable";
-import { useModelData, TableType } from "@/hooks/useModelData";
-import { accountColumns, futureColumns, transactionColumns } from "@/utils/columnDefinitions";
-import { Account, FuturePrediction, Transaction } from "@/types/models";
+import { useState, useEffect } from "react";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  flexRender,
+  type ColumnDef,
+} from "@tanstack/react-table";
+import { TransactionsAPI, AccountsAPI, FutureAPI } from "@/utils/api";
 
-/**
- * ModelPage Component
- * Displays financial data in a tabular format with sorting, filtering, and pagination capabilities
- */
+type TableType = "transactions" | "accounts" | "future_predictions";
+
+interface TransactionData {
+  Date: string;
+  Amount: number;
+  Department: string;
+}
+
+interface AccountData {
+  AccountName: string;
+  Type: string;
+  Balance: number;
+}
+
+interface FuturePredictionData {
+  Date: string;
+  Amount: number;
+  Description: string;
+  Paid: boolean;
+}
+
+type TableDataType<T extends TableType> = 
+  T extends "transactions" ? TransactionData :
+  T extends "accounts" ? AccountData :
+  T extends "future_predictions" ? FuturePredictionData :
+  never;
+
 export default function ModelPage() {
   const [selectedTable, setSelectedTable] = useState<TableType>("transactions");
-  const { data, loading, error, fetchData } = useModelData();
+  const [data, setData] = useState<TableDataType<typeof selectedTable>[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [globalFilter, setGlobalFilter] = useState("");
+
+  const transactionColumns: ColumnDef<TransactionData>[] = [
+    {
+      header: "Date",
+      accessorKey: "Date",
+      cell: ({ getValue }) => new Date(getValue() as string).toLocaleDateString(),
+    },
+    {
+      header: "Amount",
+      accessorKey: "Amount",
+      cell: ({ getValue }) => `₹${getValue() as number}`,
+    },
+    {
+      header: "Department",
+      accessorKey: "Department",
+    },
+  ];
+
+  const accountColumns: ColumnDef<AccountData>[] = [
+    {
+      header: "Account Name",
+      accessorKey: "AccountName",
+    },
+    {
+      header: "Type",
+      accessorKey: "Type",
+    },
+    {
+      header: "Balance",
+      accessorKey: "Balance",
+      cell: ({ getValue }) => `₹${getValue() as number}`,
+    },
+  ];
+
+  const futurePredictionColumns: ColumnDef<FuturePredictionData>[] = [
+    {
+      header: "Date",
+      accessorKey: "Date",
+      cell: ({ getValue }) => new Date(getValue() as string).toLocaleDateString(),
+    },
+    {
+      header: "Amount",
+      accessorKey: "Amount",
+      cell: ({ getValue }) => `₹${getValue() as number}`,
+    },
+    {
+      header: "Description",
+      accessorKey: "Description",
+    },
+    {
+      header: "Paid",
+      accessorKey: "Paid",
+      cell: ({ getValue }) => (getValue() as boolean) ? "Yes" : "No",
+    },
+  ];
+
+  const columns = {
+    transactions: transactionColumns,
+    accounts: accountColumns,
+    future_predictions: futurePredictionColumns,
+  };
+
+  const table = useReactTable({
+    data,
+    // @ts-expect-error - Dynamic column type based on selected table
+    columns: columns[selectedTable],
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    state: {
+      globalFilter,
+    },
+    onGlobalFilterChange: setGlobalFilter,
+  });
 
   useEffect(() => {
-    fetchData(selectedTable);
-  }, [selectedTable, fetchData]);
+    fetchData();
+  }, [selectedTable]);
 
-  /**
-   * Renders the appropriate table based on the selected table type
-   */
-  const renderTable = () => {
-    switch (selectedTable) {
-      case "transactions":
-        return (
-          <ModelTable<Transaction>
-            data={data as Transaction[]}
-            columns={transactionColumns}
-          />
-        );
-      case "accounts":
-        return (
-          <ModelTable<Account>
-            data={data as Account[]}
-            columns={accountColumns}
-          />
-        );
-      case "future":
-        return (
-          <ModelTable<FuturePrediction>
-            data={data as FuturePrediction[]}
-            columns={futureColumns}
-          />
-        );
-      default:
-        return null;
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      let result;
+      switch (selectedTable) {
+        case "transactions":
+          result = await TransactionsAPI.getAll();
+          break;
+        case "accounts":
+          result = await AccountsAPI.getAll();
+          break;
+        case "future_predictions":
+          result = await FutureAPI.getAll();
+          break;
+      }
+      setData(result);
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError(err instanceof Error ? err.message : "An error occurred while fetching data");
+    } finally {
+      setLoading(false);
     }
   };
 
-  /**
-   * Handles table type change
-   */
-  const handleTableChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const newType = event.target.value as TableType;
-    console.log(`Changing table type from ${selectedTable} to ${newType}`);
-    setSelectedTable(newType);
-  };
-
-  return (
-    <div className="p-4 space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900">Model View</h1>
-        <div className="relative">
-          <label htmlFor="table-select" className="sr-only">
-            Select table type
-          </label>
-          <select
-            id="table-select"
-            value={selectedTable}
-            onChange={handleTableChange}
-            className="block w-48 rounded-md border border-gray-300 py-2 pl-3 pr-10 text-base focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:text-sm"
-            aria-label="Select table type"
-          >
-            <option value="transactions">Transactions</option>
-            <option value="accounts">Accounts</option>
-            <option value="future">Future Predictions</option>
-          </select>
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-            <svg 
-              className="h-4 w-4 fill-current" 
-              xmlns="http://www.w3.org/2000/svg" 
-              viewBox="0 0 20 20"
-              aria-hidden="true"
-            >
-              <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
-            </svg>
-          </div>
+  if (error) {
+    return (
+      <div className="p-4">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
         </div>
       </div>
+    );
+  }
 
-      {error ? (
-        <div className="p-4 rounded-md bg-red-50 border border-red-200">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">
-                Error Loading Data
-              </h3>
-              <div className="mt-2 text-sm text-red-700">
-                {error}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : loading ? (
+  return (
+    <div className="p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900">Model Dashboard</h1>
+        <p className="text-gray-600 mt-2">View and manage data in tabular format</p>
+      </div>
+
+      <div className="mb-6 flex justify-between items-center">
+        <select
+          value={selectedTable}
+          onChange={(e) => setSelectedTable(e.target.value as TableType)}
+          className="block rounded-md border-0 py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-blue-600 sm:text-sm sm:leading-6"
+        >
+          <option value="transactions">Transactions</option>
+          <option value="accounts">Accounts</option>
+          <option value="future_predictions">Future Predictions</option>
+        </select>
+
+        <input
+          type="text"
+          value={globalFilter}
+          onChange={(e) => setGlobalFilter(e.target.value)}
+          placeholder="Search..."
+          className="block rounded-md border-0 py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-blue-600 sm:text-sm sm:leading-6"
+        />
+      </div>
+
+      {loading ? (
         <div className="flex justify-center items-center h-64">
-          <div 
-            className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"
-            role="status"
-            aria-label="Loading"
-          >
-            <span className="sr-only">Loading...</span>
-          </div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       ) : (
-        renderTable()
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <tr key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <th
+                        key={header.id}
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        {flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {table.getRowModel().rows.map((row) => (
+                  <tr key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <td
+                        key={cell.id}
+                        className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"
+                      >
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="px-6 py-4 flex items-center justify-between border-t border-gray-200">
+            <div className="flex gap-2">
+              <button
+                onClick={() => table.setPageIndex(0)}
+                disabled={!table.getCanPreviousPage()}
+                className="px-3 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50"
+              >
+                {"<<"}
+              </button>
+              <button
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+                className="px-3 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50"
+              >
+                {"<"}
+              </button>
+              <button
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+                className="px-3 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50"
+              >
+                {">"}
+              </button>
+              <button
+                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                disabled={!table.getCanNextPage()}
+                className="px-3 py-1 rounded bg-gray-100 text-gray-800 disabled:opacity-50"
+              >
+                {">>"}
+              </button>
+            </div>
+            <span className="text-sm text-gray-700">
+              Page {table.getState().pagination.pageIndex + 1} of{" "}
+              {table.getPageCount()}
+            </span>
+          </div>
+        </div>
       )}
     </div>
   );

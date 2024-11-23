@@ -9,15 +9,26 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@fullcalendar/core": "^6.1.15",
+    "@fullcalendar/daygrid": "^6.1.15",
+    "@fullcalendar/interaction": "^6.1.15",
+    "@fullcalendar/react": "^6.1.15",
+    "@fullcalendar/timegrid": "^6.1.15",
     "@headlessui/react": "^2.2.0",
+    "@heroicons/react": "^2.2.0",
     "@shadcn/ui": "^0.0.4",
+    "@tanstack/form-core": "^0.36.2",
+    "@tanstack/react-form": "^0.36.3",
     "@tanstack/react-table": "^8.20.5",
+    "@tanstack/zod-form-adapter": "^0.36.2",
     "@types/react-big-calendar": "^1.15.0",
     "date-fns": "^4.1.0",
     "next": "15.0.3",
     "react": "19.0.0-rc-66855b96-20241106",
     "react-big-calendar": "^1.16.0",
-    "react-dom": "19.0.0-rc-66855b96-20241106"
+    "react-dom": "19.0.0-rc-66855b96-20241106",
+    "react-hot-toast": "^2.4.1",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^20",

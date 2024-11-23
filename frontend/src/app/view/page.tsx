@@ -3,9 +3,8 @@
 import { useState, useEffect } from "react";
 import { TransactionsAPI, AccountsAPI, FutureAPI } from "@/utils/api";
 import { Transaction, Account, FuturePrediction } from "@/types/models";
-import CalendarView from "@/components/CalendarView";
 
-type Role = "CA" | "Budget Analyst" | "Owner" | "Calendar";
+type Role = "CA" | "Budget Analyst" | "Owner";
 
 export default function ViewPage() {
   const [selectedRole, setSelectedRole] = useState<Role>("Owner");
@@ -17,21 +16,19 @@ export default function ViewPage() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedRole]);
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      // Using Promise.allSettled to handle partial failures
       const results = await Promise.allSettled([
         TransactionsAPI.getAll(),
         AccountsAPI.getAll(),
         FutureAPI.getAll(),
       ]);
 
-      // Process results and handle any individual failures
       results.forEach((result, index) => {
         if (result.status === 'fulfilled') {
           switch(index) {
@@ -48,7 +45,6 @@ export default function ViewPage() {
           }
         } else {
           console.error(`Error fetching data for index ${index}:`, result.reason);
-          // Set error message for the failed request
           setError(result.reason?.message || "Failed to fetch some data");
         }
       });
@@ -63,7 +59,6 @@ export default function ViewPage() {
 
   const parseBalance = (balance: number | string): number => {
     if (typeof balance === 'number') return balance;
-    // Remove commas and convert to float
     const cleanValue = balance.replace(/,/g, '');
     const parsedValue = parseFloat(cleanValue);
     return isNaN(parsedValue) ? 0 : parsedValue;
@@ -103,7 +98,6 @@ export default function ViewPage() {
   const calculateUpcomingPayments = (): number => {
     if (!futurePredictions || futurePredictions.length === 0) return 0;
     const today = new Date();
-    // Filter only unpaid future payments from today onwards
     return futurePredictions
       .filter((f) => !f.Paid && new Date(f.Date) >= today)
       .reduce((total, f) => total + Math.abs(parseBalance(f.Amount)), 0);
@@ -253,10 +247,6 @@ export default function ViewPage() {
     </div>
   );
 
-  const renderCalendarView = () => (
-    <CalendarView transactions={transactions} futurePredictions={futurePredictions} />
-  );
-
   const renderContent = () => {
     switch (selectedRole) {
       case "CA":
@@ -265,8 +255,6 @@ export default function ViewPage() {
         return renderBudgetAnalystView();
       case "Owner":
         return renderOwnerView();
-      case "Calendar":
-        return renderCalendarView();
       default:
         return null;
     }
@@ -283,8 +271,8 @@ export default function ViewPage() {
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex justify-between items-center">
+    <div className="p-6">
+      <div className="mb-6 flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">View Dashboard</h1>
         <select
           value={selectedRole}
@@ -294,7 +282,6 @@ export default function ViewPage() {
           <option value="Owner">Owner</option>
           <option value="CA">CA</option>
           <option value="Budget Analyst">Budget Analyst</option>
-          <option value="Calendar">Calendar</option>
         </select>
       </div>
 
