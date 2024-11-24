@@ -161,6 +161,56 @@ def reconcile_transactions(db: Session) -> dict:
             
     return stats
 
+def is_duplicate_transaction(
+    db: Session,
+    transaction: ICICITransactionCreate,
+    tolerance: Decimal = Decimal('0.01')
+) -> bool:
+    """
+    Check if a transaction is a duplicate by comparing multiple fields.
+    
+    Args:
+        db: Database session
+        transaction: Transaction to check
+        tolerance: Amount difference tolerance (default: 0.01)
+        
+    Returns:
+        bool: True if transaction is a duplicate, False otherwise
+    """
+    amount = transaction.debit or transaction.credit
+    if amount is None:
+        return False
+        
+    # Query for potential duplicates with matching date and amount
+    query = db.query(ICICISavingsTransactions).filter(
+        and_(
+            ICICISavingsTransactions.transaction_date == transaction.transaction_date,
+            or_(
+                and_(
+                    ICICISavingsTransactions.debit.isnot(None),
+                    ICICISavingsTransactions.debit >= amount - tolerance,
+                    ICICISavingsTransactions.debit <= amount + tolerance
+                ),
+                and_(
+                    ICICISavingsTransactions.credit.isnot(None),
+                    ICICISavingsTransactions.credit >= amount - tolerance,
+                    ICICISavingsTransactions.credit <= amount + tolerance
+                )
+            ),
+            ICICISavingsTransactions.balance >= transaction.balance - tolerance,
+            ICICISavingsTransactions.balance <= transaction.balance + tolerance
+        )
+    )
+    
+    # Check description similarity for potential duplicates
+    for existing in query.all():
+        # If descriptions are similar enough, consider it a duplicate
+        if (existing.description.lower() in transaction.description.lower() or
+            transaction.description.lower() in existing.description.lower()):
+            return True
+    
+    return False
+
 def bulk_create_transactions(
     db: Session,
     transactions: List[ICICITransactionCreate]
@@ -182,13 +232,14 @@ def bulk_create_transactions(
     }
     
     for transaction in transactions:
-        # Check if transaction already exists
-        existing = get_by_ref_no(db, transaction.ref_no)
-        if existing:
+        # Check if transaction is a duplicate using multiple fields
+        if is_duplicate_transaction(db, transaction):
             stats["duplicate_transactions"] += 1
+            logger.info(f"Duplicate transaction found: {transaction.description} on {transaction.transaction_date}")
             continue
             
         create(db, obj_in=transaction)
         stats["new_transactions"] += 1
+        logger.info(f"New transaction created: {transaction.description} on {transaction.transaction_date}")
         
     return stats

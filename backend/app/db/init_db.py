@@ -3,6 +3,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import inspect
 from .session import engine, SessionLocal
 from ..models.models import Base, TransactionsPast, AccountsPresent  # Import from models.py
+from ..db.migrations.create_icici_transactions import create_icici_transactions_table
 
 logger = logging.getLogger(__name__)
 
@@ -13,8 +14,9 @@ def init_db() -> None:
     This function:
     1. Tests the database connection
     2. Creates all tables defined in the models
-    3. Verifies that required tables exist
-    4. Logs table structure for verification
+    3. Creates ICICI transactions table using migration
+    4. Verifies that required tables exist
+    5. Logs table structure for verification
     
     Raises:
         SQLAlchemyError: If database connection fails
@@ -37,13 +39,17 @@ def init_db() -> None:
         logger.info("Creating database tables...")
         Base.metadata.create_all(bind=engine)
         
+        # Run ICICI transactions table migration
+        logger.info("Running ICICI transactions table migration...")
+        create_icici_transactions_table()
+        
         # Verify tables exist
         inspector = inspect(engine)
         tables = inspector.get_table_names()
         logger.info(f"Available tables: {tables}")
         
         # Verify each required table
-        required_tables = ['Transactions(Past)', 'Accounts(Present)', 'Freedom(Future)']
+        required_tables = ['Transactions(Past)', 'Accounts(Present)', 'Freedom(Future)', 'ICICI_Savings_Transactions']
         for table in required_tables:
             if table not in tables:
                 logger.error(f"Required table '{table}' is missing!")
