@@ -8,7 +8,7 @@ import logging
 
 from app.crud.base import CRUDBase
 from app.models.models import FreedomFuture
-from app.schemas.schemas import FutureCreate, FutureUpdate
+from app.schemas.schemas import FuturePredictionCreate as FutureCreate, FuturePredictionUpdate as FutureUpdate
 from sqlalchemy import and_, desc, cast, Date, func, text
 from sqlalchemy.orm import Session
 

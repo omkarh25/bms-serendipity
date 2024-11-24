@@ -1,7 +1,7 @@
 """Main API router that includes all endpoint routers."""
 
 from fastapi import APIRouter
-from app.api.api_v1.endpoints import transactions, accounts, future, notifications
+from app.api.api_v1.endpoints import transactions, accounts, future, notifications, bank_statements
 
 api_router = APIRouter()
 
@@ -28,4 +28,10 @@ api_router.include_router(
     notifications.router,
     prefix="/notifications",
     tags=["notifications"]
+)
+
+api_router.include_router(
+    bank_statements.router,
+    prefix="/bank-statements",
+    tags=["bank-statements"]
 )

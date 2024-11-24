@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { TransactionsAPI, AccountsAPI, FutureAPI, NotificationsAPI } from "@/utils/api";
+import { TransactionsAPI, AccountsAPI, FutureAPI, NotificationsAPI, BankStatementsAPI } from "@/utils/api";
 import {
   TransactionCreate,
   AccountCreate,
   FuturePredictionCreate,
+  BankStatementUploadResponse,
+  ReconciliationResponse,
 } from "@/types/models";
 import { TransactionForm } from "@/components/forms/TransactionForm";
 import { AccountForm } from "@/components/forms/AccountForm";
@@ -18,6 +20,9 @@ export default function ControllerPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showBankActions, setShowBankActions] = useState(false);
+  const [uploadStats, setUploadStats] = useState<BankStatementUploadResponse | null>(null);
+  const [reconcileStats, setReconcileStats] = useState<ReconciliationResponse | null>(null);
 
   const handleSubmit = async (data: TransactionCreate | AccountCreate | FuturePredictionCreate) => {
     setLoading(true);
@@ -62,6 +67,49 @@ export default function ControllerPage() {
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+      setUploadStats(null);
+
+      console.log("Uploading file:", file.name);
+      const response = await BankStatementsAPI.uploadICICI(file);
+      console.log("Upload response:", response);
+      
+      setUploadStats(response);
+      setSuccess("Bank statement uploaded successfully");
+    } catch (err) {
+      console.error("Upload error:", err);
+      setError(err instanceof Error ? err.message : "Failed to upload bank statement");
+    } finally {
+      setLoading(false);
+      // Reset file input
+      event.target.value = '';
+    }
+  };
+
+  const handleReconcile = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccess(null);
+      setReconcileStats(null);
+
+      const response = await BankStatementsAPI.reconcileICICI();
+      setReconcileStats(response);
+      setSuccess("Reconciliation completed successfully");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to reconcile transactions");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderForm = () => {
     switch (selectedAction) {
       case "transaction":
@@ -73,6 +121,32 @@ export default function ControllerPage() {
       default:
         return null;
     }
+  };
+
+  const renderStats = () => {
+    if (uploadStats) {
+      return (
+        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+          <h3 className="font-semibold mb-2">Upload Statistics:</h3>
+          <p>Total Transactions: {uploadStats.total_transactions}</p>
+          <p>New Transactions: {uploadStats.new_transactions}</p>
+          <p>Duplicate Transactions: {uploadStats.duplicate_transactions}</p>
+        </div>
+      );
+    }
+
+    if (reconcileStats) {
+      return (
+        <div className="mt-4 p-4 bg-green-50 rounded-lg">
+          <h3 className="font-semibold mb-2">Reconciliation Statistics:</h3>
+          <p>Total Transactions: {reconcileStats.total_transactions}</p>
+          <p>Reconciled: {reconcileStats.reconciled_transactions}</p>
+          <p>Unreconciled: {reconcileStats.unreconciled_transactions}</p>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -106,6 +180,48 @@ export default function ControllerPage() {
             >
               {loading ? "Sending..." : "Send Payment Notifications"}
             </button>
+            <div className="relative">
+              <button
+                onClick={() => setShowBankActions(!showBankActions)}
+                className="rounded-md bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-500"
+              >
+                Bank Actions
+              </button>
+              {showBankActions && (
+                <div className="absolute right-0 mt-2 w-56 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5">
+                  <div className="py-1" role="menu">
+                    <label className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+                      Upload Bank Statement
+                      <input
+                        type="file"
+                        accept=".xls,.xlsx"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        disabled={loading}
+                      />
+                    </label>
+                    <div className="px-4 py-2 text-sm text-gray-700">
+                      Reconcile:
+                      <div className="ml-2 space-y-1">
+                        <button
+                          onClick={handleReconcile}
+                          disabled={loading}
+                          className="block w-full text-left px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                        >
+                          ICICI Bank
+                        </button>
+                        <button
+                          className="block w-full text-left px-2 py-1 text-sm text-gray-700 hover:bg-gray-100 opacity-50 cursor-not-allowed"
+                          disabled
+                        >
+                          SBI (Coming Soon)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -121,6 +237,8 @@ export default function ControllerPage() {
           {success}
         </div>
       )}
+
+      {renderStats()}
 
       {selectedAction && (
         <div className="bg-white p-6 rounded-lg shadow max-w-2xl mx-auto">

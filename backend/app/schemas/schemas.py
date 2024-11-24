@@ -1,28 +1,63 @@
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List
-from datetime import date
-from decimal import Decimal
-from .base import BaseSchema
-from app.models.models import PaymentMode, Department, Category, AccountType
+"""Pydantic models for API request/response handling."""
 
+from typing import Optional, List
+from pydantic import BaseModel, Field
+from datetime import date, datetime
+from decimal import Decimal
+from enum import Enum
+
+class PaymentMode(str, Enum):
+    Cash = "Cash"
+    Credit = "Credit"
+    Dollars = "Dollars"
+    ICICI_090 = "ICICI_090"
+    ICICI_Current = "ICICI_Current"
+    ICICI_CC_9003 = "ICICI_CC_9003"
+    ICICI_CC_1009 = "ICICI_CC_1009"
+    SBI = "SBI"
+    SBI_3479 = "SBI_3479"
+    DBS = "DBS"
+    Debit = "Debit"
+
+class Department(str, Enum):
+    Serendipity = "Serendipity"
+    Dhoom_Studios = "Dhoom Studios"
+    Trademan = "Trademan"
+
+class Category(str, Enum):
+    Salaries = "Salaries"
+    Hand_Loans = "Hand Loans"
+    Maintenance = "Maintenance"
+    Income = "Income"
+    EMI = "EMI"
+    Chits = "Chits"
+
+class AccountType(str, Enum):
+    HL = "HL"
+    EMI = "EMI"
+    HLG = "HLG"
+    CC = "CC"
+    CAS = "CAS"
+    Chit = "Chit"
+    CON = "CON"
+    ACC = "ACC"
+
+# Transaction schemas
 class TransactionBase(BaseModel):
-    """Base schema for transactions."""
     Date: date
-    Description: str = Field(..., min_length=1)
-    Amount: Decimal = Field(..., decimal_places=2)
+    Description: str
+    Amount: Decimal
     PaymentMode: PaymentMode
-    AccID: str = Optional[str]  # Regex adapted to typical AccID structure
+    AccID: str
     Department: Department
     Comments: Optional[str] = None
     Category: Category
-    ZohoMatch: Optional[bool] = False
+    ZohoMatch: bool = False
 
 class TransactionCreate(TransactionBase):
-    """Schema for creating a transaction."""
     pass
 
 class TransactionUpdate(BaseModel):
-    """Schema for updating a transaction."""
     Date: Optional[date] = None
     Description: Optional[str] = None
     Amount: Optional[Decimal] = None
@@ -33,37 +68,31 @@ class TransactionUpdate(BaseModel):
     Category: Optional[Category] = None
     ZohoMatch: Optional[bool] = None
 
-class Transaction(TransactionBase, BaseSchema):
-    """Schema for transaction response."""
-    TrNo: int  # Updated to match Excel column name
+class Transaction(TransactionBase):
+    TrNo: int
 
     class Config:
-        orm_mode = True
-        allow_population_by_field_name = True
-        alias_generator = lambda x: x  # Preserve original casing
+        from_attributes = True
 
+# Account schemas
 class AccountBase(BaseModel):
-    """Base schema for accounts."""
-    AccountName: str = Field(..., min_length=1)
+    AccountName: str
     Type: AccountType
-    AccID: Optional[str]  # Updated for consistency with AccID
-    Balance: Decimal = Field(..., decimal_places=2)
-    IntRate: Optional[Decimal] = None
-    NextDueDate: Optional[str] = None
+    AccID: str
+    Balance: Decimal
+    IntRate: Decimal
+    NextDueDate: str
     Bank: PaymentMode
     Tenure: Optional[int] = None
     EMIAmt: Optional[Decimal] = None
     Comments: Optional[str] = None
 
 class AccountCreate(AccountBase):
-    """Schema for creating an account."""
     pass
 
 class AccountUpdate(BaseModel):
-    """Schema for updating an account."""
     AccountName: Optional[str] = None
     Type: Optional[AccountType] = None
-    AccID: Optional[str] = None
     Balance: Optional[Decimal] = None
     IntRate: Optional[Decimal] = None
     NextDueDate: Optional[str] = None
@@ -72,39 +101,28 @@ class AccountUpdate(BaseModel):
     EMIAmt: Optional[Decimal] = None
     Comments: Optional[str] = None
 
-    class Config:
-        allow_population_by_field_name = True
-        alias_generator = lambda x: x  # Preserve original casing
-
-class Account(AccountBase, BaseSchema):
-    """Schema for account response."""
-    SLNo: int  # Updated to match Excel column name
-    past_transactions: List[Transaction] = []
-    future_transactions: List['FuturePrediction'] = []
+class Account(AccountBase):
+    SLNo: int
 
     class Config:
-        orm_mode = True
-        allow_population_by_field_name = True
-        alias_generator = lambda x: x  # Preserve original casing
+        from_attributes = True
 
-class FutureBase(BaseModel):
-    """Base schema for future predictions."""
+# Future prediction schemas
+class FuturePredictionBase(BaseModel):
     Date: date
-    Description: str = Field(..., min_length=1)
-    Amount: Decimal = Field(..., decimal_places=2)
+    Description: str
+    Amount: Decimal
     PaymentMode: PaymentMode
-    AccID: Optional[str]
+    AccID: str
     Department: Department
     Comments: Optional[str] = None
     Category: Category
     Paid: bool = False
 
-class FutureCreate(FutureBase):
-    """Schema for creating a future prediction."""
+class FuturePredictionCreate(FuturePredictionBase):
     pass
 
-class FutureUpdate(BaseModel):
-    """Schema for updating a future prediction."""
+class FuturePredictionUpdate(BaseModel):
     Date: Optional[date] = None
     Description: Optional[str] = None
     Amount: Optional[Decimal] = None
@@ -115,18 +133,56 @@ class FutureUpdate(BaseModel):
     Category: Optional[Category] = None
     Paid: Optional[bool] = None
 
-    class Config:
-        allow_population_by_field_name = True
-        alias_generator = lambda x: x  # Preserve original casing
-
-class FuturePrediction(FutureBase, BaseSchema):
-    """Schema for future prediction response."""
-    TrNo: int  # Updated to match Excel column name
+class FuturePrediction(FuturePredictionBase):
+    TrNo: int
 
     class Config:
-        orm_mode = True
-        allow_population_by_field_name = True
-        alias_generator = lambda x: x  # Preserve original casing
+        from_attributes = True
 
-# Update Account model to include the forward reference
-Account.update_forward_refs()
+# Aliases for backward compatibility
+FutureCreate = FuturePredictionCreate
+FutureUpdate = FuturePredictionUpdate
+Future = FuturePrediction
+
+# ICICI Bank Transaction schemas
+class ICICITransactionBase(BaseModel):
+    """Base schema for ICICI bank transactions."""
+    transaction_date: date = Field(..., description="Date of transaction")
+    value_date: date = Field(..., description="Value date of transaction")
+    description: str = Field(..., description="Transaction description")
+    ref_no: str = Field(..., description="Reference number")
+    debit: Optional[Decimal] = Field(None, description="Debit amount")
+    credit: Optional[Decimal] = Field(None, description="Credit amount")
+    balance: Decimal = Field(..., description="Running balance")
+    reconciled: bool = Field(False, description="Whether transaction is reconciled")
+    transaction_id: Optional[int] = Field(None, description="Reference to main transaction if reconciled")
+
+class ICICITransactionCreate(ICICITransactionBase):
+    pass
+
+class ICICITransactionUpdate(BaseModel):
+    reconciled: Optional[bool] = None
+    transaction_id: Optional[int] = None
+
+class ICICITransaction(ICICITransactionBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Response schemas for bank statement upload and reconciliation
+class BankStatementUploadResponse(BaseModel):
+    """Response schema for bank statement upload."""
+    total_transactions: int = Field(..., description="Total number of transactions in the statement")
+    new_transactions: int = Field(..., description="Number of new transactions added")
+    duplicate_transactions: int = Field(..., description="Number of duplicate transactions skipped")
+    message: str = Field(..., description="Status message")
+
+class ReconciliationResponse(BaseModel):
+    """Response schema for reconciliation operation."""
+    total_transactions: int = Field(..., description="Total number of transactions processed")
+    reconciled_transactions: int = Field(..., description="Number of transactions reconciled")
+    unreconciled_transactions: int = Field(..., description="Number of transactions that couldn't be reconciled")
+    message: str = Field(..., description="Status message")

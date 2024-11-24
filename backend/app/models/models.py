@@ -123,3 +123,23 @@ class FreedomFuture(Base):
 
     def __repr__(self):
         return f"<FreedomFuture(TrNo={self.TrNo}, Date={self.Date}, Amount={self.Amount}, Paid={self.Paid})>"
+
+class ICICISavingsTransactions(Base):
+    """Model for ICICI Bank savings account transactions."""
+    __tablename__ = "ICICI_Savings_Transactions"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True, doc="Unique identifier")
+    transaction_date = Column(Date, nullable=False, doc="Date of transaction")
+    value_date = Column(Date, nullable=False, doc="Value date of transaction")
+    description = Column(String, nullable=False, doc="Transaction description")
+    ref_no = Column(String, nullable=False, doc="Reference number")
+    debit = Column(Numeric(10, 2), nullable=True, doc="Debit amount")
+    credit = Column(Numeric(10, 2), nullable=True, doc="Credit amount")
+    balance = Column(Numeric(10, 2), nullable=False, doc="Running balance")
+    reconciled = Column(Boolean, default=False, doc="Whether transaction is reconciled with main transactions")
+    transaction_id = Column(Integer, ForeignKey('Transactions(Past).TrNo'), nullable=True, doc="Reference to main transaction if reconciled")
+    created_at = Column(DateTime, default=datetime.utcnow, doc="Record creation timestamp")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, doc="Record last update timestamp")
+
+    def __repr__(self):
+        return f"<ICICISavingsTransactions(id={self.id}, date={self.transaction_date}, amount={self.debit or self.credit}, reconciled={self.reconciled})>"

@@ -12,6 +12,9 @@ import {
   AccountUpdate,
   FuturePredictionCreate,
   FuturePredictionUpdate,
+  ICICITransaction,
+  BankStatementUploadResponse,
+  ReconciliationResponse,
 } from '../types/models';
 
 // Default to environment variable, fallback to localhost:8000
@@ -26,14 +29,6 @@ export class APIError extends Error {
     this.name = 'APIError';
   }
 }
-
-/**
- * Generic API response type
- */
-type APIResponse<T> = {
-  data: T;
-  error?: string;
-};
 
 /**
  * Empty request type for endpoints that don't require a body
@@ -52,7 +47,7 @@ class APIClient {
     
     try {
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'An error occurred' }));
+        const errorData = await response.json().catch(() => ({ message: response.statusText }));
         throw new APIError(response.status, errorData.message || `HTTP error! status: ${response.status}`);
       }
 
@@ -61,13 +56,6 @@ class APIClient {
       }
 
       const jsonData = await response.json();
-
-      // If the response is already in the correct format, return it
-      if (jsonData.data !== undefined) {
-        return jsonData.data;
-      }
-
-      // Otherwise, return the data directly
       return jsonData;
     } catch (error) {
       console.error('API Response Error:', {
@@ -108,19 +96,24 @@ class APIClient {
   }
 
   /**
-   * Performs POST request
+   * Performs POST request with optional FormData support
    */
-  static async post<T, D>(endpoint: string, data: D): Promise<T> {
+  static async post<T, D>(endpoint: string, data: D, isFormData: boolean = false): Promise<T> {
     try {
       console.log(`POST Request to: ${API_BASE_URL}${endpoint}`);
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+      };
+
+      if (!isFormData) {
+        headers['Content-Type'] = 'application/json';
+      }
+
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers,
         credentials: 'include',
-        body: JSON.stringify(data),
+        body: isFormData ? data as unknown as FormData : JSON.stringify(data),
       });
 
       return this.handleResponse<T>(response);
@@ -256,4 +249,21 @@ export const FutureAPI = {
 export const NotificationsAPI = {
   sendPaymentNotifications: () => 
     APIClient.post<{ message: string }, EmptyRequest>('/notifications/send-payment-notifications/', {}),
+};
+
+/**
+ * Bank Statement API endpoints
+ */
+export const BankStatementsAPI = {
+  uploadICICI: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return APIClient.post<BankStatementUploadResponse, FormData>('/bank-statements/upload/icici', formData, true);
+  },
+
+  reconcileICICI: () => 
+    APIClient.post<ReconciliationResponse, EmptyRequest>('/bank-statements/reconcile/icici', {}),
+
+  getICICITransactions: (params?: { reconciled?: string }) => 
+    APIClient.get<ICICITransaction[]>('/bank-statements/icici', params),
 };

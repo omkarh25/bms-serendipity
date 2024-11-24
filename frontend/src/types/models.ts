@@ -1,7 +1,3 @@
-/**
- * Common types used across the application
- */
-
 export enum PaymentMode {
   Cash = "Cash",
   Credit = "Credit",
@@ -42,8 +38,8 @@ export enum AccountType {
   ACC = "ACC"
 }
 
-export interface Transaction extends Record<string, unknown> {
-  TrNo: number;
+// Base interfaces
+interface TransactionBase {
   Date: string;
   Description: string;
   Amount: number;
@@ -55,8 +51,7 @@ export interface Transaction extends Record<string, unknown> {
   ZohoMatch: boolean;
 }
 
-export interface Account extends Record<string, unknown> {
-  SLNo: number;
+interface AccountBase {
   AccountName: string;
   Type: AccountType;
   AccID: string;
@@ -69,8 +64,7 @@ export interface Account extends Record<string, unknown> {
   Comments?: string;
 }
 
-export interface FuturePrediction extends Record<string, unknown> {
-  TrNo: number;
+interface FuturePredictionBase {
   Date: string;
   Description: string;
   Amount: number;
@@ -79,61 +73,58 @@ export interface FuturePrediction extends Record<string, unknown> {
   Department: Department;
   Comments?: string;
   Category: Category;
-  Paid: boolean;  // Updated to use boolean since API returns false/true
+  Paid: boolean;
 }
 
-// Form interfaces for creating new records
-export interface TransactionFormData {
-  Date?: string;
-  Description?: string;
-  Amount?: number;
-  PaymentMode?: PaymentMode;
-  AccID?: string;
-  Department?: Department;
-  Comments?: string;
-  Category?: Category;
-  ZohoMatch?: boolean;
+// Create interfaces
+export type TransactionCreate = TransactionBase;
+export type AccountCreate = AccountBase;
+export type FuturePredictionCreate = FuturePredictionBase;
+
+// Update interfaces
+export type TransactionUpdate = Partial<TransactionBase>;
+export type AccountUpdate = Partial<AccountBase>;
+export type FuturePredictionUpdate = Partial<FuturePredictionBase>;
+
+// Full interfaces with IDs
+export interface Transaction extends TransactionBase {
+  TrNo: number;
 }
 
-export interface AccountFormData {
-  AccountName?: string;
-  Type?: AccountType;
-  AccID?: string;
-  Balance?: number;
-  IntRate?: number;
-  NextDueDate?: string;
-  Bank?: PaymentMode;
-  Tenure?: number;
-  EMIAmt?: number;
-  Comments?: string;
+export interface Account extends AccountBase {
+  SLNo: number;
 }
 
-export interface FuturePredictionFormData {
-  Date?: string;
-  Description?: string;
-  Amount?: number;
-  PaymentMode?: PaymentMode;
-  AccID?: string;
-  Department?: Department;
-  Comments?: string;
-  Category?: Category;
-  Paid?: boolean;  // Updated to use boolean
+export interface FuturePrediction extends FuturePredictionBase {
+  TrNo: number;
 }
 
-// Type for creating a new transaction
-export type TransactionCreate = Omit<Transaction, 'TrNo'>;
+// Bank Statement interfaces
+export interface ICICITransaction {
+  id: number;
+  transaction_date: string;
+  value_date: string;
+  description: string;
+  ref_no: string;
+  debit?: number;
+  credit?: number;
+  balance: number;
+  reconciled: boolean;
+  transaction_id?: number;
+  created_at: string;
+  updated_at: string;
+}
 
-// Type for updating an existing transaction
-export type TransactionUpdate = Partial<TransactionCreate>;
+export interface BankStatementUploadResponse {
+  total_transactions: number;
+  new_transactions: number;
+  duplicate_transactions: number;
+  message: string;
+}
 
-// Type for creating a new account
-export type AccountCreate = Omit<Account, 'SLNo'>;
-
-// Type for updating an existing account
-export type AccountUpdate = Partial<AccountCreate>;
-
-// Type for creating a new future prediction
-export type FuturePredictionCreate = Omit<FuturePrediction, 'TrNo'>;
-
-// Type for updating an existing future prediction
-export type FuturePredictionUpdate = Partial<FuturePredictionCreate>;
+export interface ReconciliationResponse {
+  total_transactions: number;
+  reconciled_transactions: number;
+  unreconciled_transactions: number;
+  message: string;
+}
