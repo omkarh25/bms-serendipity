@@ -14,10 +14,23 @@ import {
 /**
  * Sidebar component for main navigation
  * Implements Single Responsibility Principle by handling only navigation
+ * Features auto-collapse after 3 seconds of inactivity
  */
 export const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
+
+  // Auto-collapse timer
+  useEffect(() => {
+    if (!isCollapsed) {
+      const timer = setTimeout(() => {
+        setIsCollapsed(true);
+      }, 3000); // 3 seconds delay
+
+      // Cleanup timer on component unmount or when sidebar is manually collapsed
+      return () => clearTimeout(timer);
+    }
+  }, [isCollapsed]);
 
   const navigationItems = [
     {
@@ -88,6 +101,7 @@ export const Sidebar = () => {
       className={`${
         isCollapsed ? 'w-16' : 'w-64'
       } fixed left-0 h-screen bg-gray-900 text-white transition-all duration-300 ease-in-out z-50`}
+      onMouseEnter={() => setIsCollapsed(false)} // Expand on hover
     >
       <div className="flex flex-col h-full">
         {/* Header */}
