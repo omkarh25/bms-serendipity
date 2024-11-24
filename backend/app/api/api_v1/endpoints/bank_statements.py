@@ -18,6 +18,29 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+def find_header_row(df: pd.DataFrame) -> int:
+    """
+    Find the actual transaction data header row.
+    
+    Args:
+        df: DataFrame containing the Excel data
+        
+    Returns:
+        int: Index of the header row
+        
+    Raises:
+        HTTPException: If header row cannot be found
+    """
+    for idx, row in df.iterrows():
+        row_text = ' '.join([str(x).strip() if pd.notna(x) else '' for x in row.values]).lower()
+        if 'withdrawal amount' in row_text and 'deposit amount' in row_text:
+            return idx
+            
+    raise HTTPException(
+        status_code=400,
+        detail="Could not find transaction data section in the statement"
+    )
+
 def parse_icici_statement(file: UploadFile) -> List[schemas.ICICITransactionCreate]:
     """
     Parse ICICI bank statement Excel file.
@@ -35,41 +58,68 @@ def parse_icici_statement(file: UploadFile) -> List[schemas.ICICITransactionCrea
         # Read Excel file based on extension
         file_extension = file.filename.split('.')[-1].lower()
         
-        # Skip header rows and read actual transaction data
+        # First read to find the header row
         if file_extension == 'xls':
-            df = pd.read_excel(file.file, engine='xlrd', skiprows=20)
+            df_preview = pd.read_excel(file.file, engine='xlrd', nrows=25)
         elif file_extension == 'xlsx':
-            df = pd.read_excel(file.file, engine='openpyxl', skiprows=20)
+            df_preview = pd.read_excel(file.file, engine='openpyxl', nrows=25)
         else:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid file format. Only Excel files (.xls, .xlsx) are supported."
             )
         
-        # Log the columns we found
-        logger.debug(f"Found columns: {list(df.columns)}")
+        # Find the header row
+        header_row = find_header_row(df_preview)
+        logger.info(f"Found header row at index: {header_row}")
         
-        # Drop any unnamed columns and empty rows
-        df = df.dropna(how='all')
-        df = df.dropna(axis=1, how='all')
+        # Read the file again with the correct header
+        if file_extension == 'xls':
+            df = pd.read_excel(file.file, engine='xlrd', skiprows=header_row)
+        else:
+            df = pd.read_excel(file.file, engine='openpyxl', skiprows=header_row)
         
-        # Log the first few rows
-        logger.debug(f"First few rows after cleaning:\n{df.head()}")
+        # Get column mappings from the first row
+        columns = {}
+        first_row = df.iloc[0]
+        for col in df.columns:
+            value = str(first_row[col]).strip()
+            if 'Value Date' in value:
+                columns['value_date'] = col
+            elif 'Transaction Date' in value:
+                columns['transaction_date'] = col
+            elif 'Cheque Number' in value:
+                columns['ref_no'] = col
+            elif 'Transaction Remarks' in value:
+                columns['description'] = col
+            elif 'Withdrawal Amount' in value:
+                columns['debit'] = col
+            elif 'Deposit Amount' in value:
+                columns['credit'] = col
+            elif 'Balance' in value:
+                columns['balance'] = col
+        
+        logger.info("Column mapping found:")
+        for k, v in columns.items():
+            logger.info(f"  {k} -> {v}")
+        
+        # Skip the header row and process transactions
+        data = df.iloc[1:]
         
         transactions = []
-        for _, row in df.iterrows():
+        for _, row in data.iterrows():
             try:
                 # Convert amounts to Decimal, handling NaN values
-                debit = Decimal(str(row['Debit'])) if pd.notna(row['Debit']) else None
-                credit = Decimal(str(row['Credit'])) if pd.notna(row['Credit']) else None
-                balance = Decimal(str(row['Balance']))
+                debit = Decimal(str(row[columns['debit']])) if pd.notna(row[columns['debit']]) and row[columns['debit']] != 0 else None
+                credit = Decimal(str(row[columns['credit']])) if pd.notna(row[columns['credit']]) and row[columns['credit']] != 0 else None
+                balance = Decimal(str(row[columns['balance']]))
                 
                 # Create transaction object
                 transaction = schemas.ICICITransactionCreate(
-                    transaction_date=pd.to_datetime(row['Transaction Date']).date(),
-                    value_date=pd.to_datetime(row['Value Date']).date(),
-                    description=str(row['Description']),
-                    ref_no=str(row['Ref No./Cheque No.']),
+                    transaction_date=pd.to_datetime(row[columns['transaction_date']]).date(),
+                    value_date=pd.to_datetime(row[columns['value_date']]).date(),
+                    description=str(row[columns['description']]),
+                    ref_no=str(row[columns['ref_no']]),
                     debit=debit,
                     credit=credit,
                     balance=balance,
