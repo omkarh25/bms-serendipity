@@ -1,11 +1,12 @@
-"""Main API router that includes all endpoint routers."""
-
+"""
+Main API router configuration.
+"""
 from fastapi import APIRouter
 from app.api.api_v1.endpoints import transactions, accounts, future, notifications
 
 api_router = APIRouter()
 
-# Include all endpoint routers
+# Include routers for different endpoints
 api_router.include_router(
     transactions.router,
     prefix="/transactions",

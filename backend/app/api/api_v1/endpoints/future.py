@@ -1,244 +1,210 @@
-"""API endpoints for future predictions."""
-
+"""
+API endpoints for handling future payments.
+Following Single Responsibility and Dependency Injection principles.
+"""
 import logging
 from typing import List, Optional
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from datetime import date
-
-from app.db.database import get_db
-from app.crud import crud
-from app.schemas import schemas
-from app.core.config import settings
-
-# Configure logging
-logger = logging.getLogger(__name__)
+from app.api import deps
+from app.services.payment.future_payment_service import FuturePaymentService
+from app.services.notification.telegram import TelegramNotificationProvider
+from app.schemas.schemas import FuturePrediction, FutureCreate, FutureUpdate
+from app.crud.crud_future import CRUDFuture
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-@router.get("/", response_model=List[schemas.FuturePrediction])
+async def get_payment_service(
+    db: Session = Depends(deps.get_db),
+    notification_provider: Optional[TelegramNotificationProvider] = Depends(
+        deps.get_notification_provider,
+        use_cache=True
+    )
+) -> FuturePaymentService:
+    """Dependency to get configured payment service."""
+    return FuturePaymentService(
+        db=db,
+        notification_provider=notification_provider
+    )
+
+@router.get("/predictions", response_model=List[FuturePrediction])
 async def get_future_predictions(
-    db: Session = Depends(get_db),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=1000),
-    paid_only: bool = False,
-    unpaid_only: bool = False
-):
-    """Get list of future predictions with optional filtering.
-    
-    Args:
-        db: Database session
-        skip: Number of records to skip
-        limit: Maximum number of records to return
-        paid_only: Filter for paid predictions only
-        unpaid_only: Filter for unpaid predictions only
-    
-    Returns:
-        List[schemas.FuturePrediction]: List of future predictions
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    paid_status: Optional[bool] = Query(None, description="Filter by paid status"),
+    payment_service: FuturePaymentService = Depends(get_payment_service)
+) -> List[FuturePrediction]:
+    """
+    Get future payment predictions with optional date range and paid status filters.
     """
     try:
-        if unpaid_only:
-            predictions = crud.future.get_unpaid(db, skip=skip, limit=limit)
+        if paid_status is False:
+            payments = await payment_service.get_unpaid_payments(
+                start_date=start_date,
+                end_date=end_date
+            )
         else:
-            predictions = crud.future.get_all(db)
-            if paid_only:
-                predictions = [p for p in predictions if p.paid]
-        return predictions
+            # Use the CRUD directly for other queries as the service focuses on unpaid payments
+            crud = CRUDFuture()
+            payments = crud.get_by_date_range(
+                db=payment_service.db,
+                start_date=start_date,
+                end_date=end_date,
+                paid_status=paid_status
+            )
+        
+        logger.info(f"Retrieved {len(payments)} future predictions")
+        return payments
+        
     except Exception as e:
-        logger.error(f"Error fetching future predictions: {str(e)}")
+        logger.error(f"Error retrieving future predictions: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail="Error fetching future predictions"
+            detail=f"Failed to retrieve future predictions: {str(e)}"
         )
 
-@router.get("/date-range", response_model=List[schemas.FuturePrediction])
-async def get_predictions_by_date_range(
-    start_date: date,
-    end_date: date,
-    db: Session = Depends(get_db)
-):
-    """Get future predictions within a date range.
-    
-    Args:
-        start_date: Start date
-        end_date: End date
-        db: Database session
-    
-    Returns:
-        List[schemas.FuturePrediction]: List of future predictions
-    """
+@router.get("/predictions/upcoming", response_model=List[FuturePrediction])
+async def get_upcoming_predictions(
+    days_ahead: int = Query(7, description="Number of days to look ahead"),
+    payment_service: FuturePaymentService = Depends(get_payment_service)
+) -> List[FuturePrediction]:
+    """Get upcoming payment predictions for the next specified number of days."""
     try:
-        predictions = crud.future.get_by_date_range(db, start_date, end_date)
-        return predictions
+        payments = await payment_service.get_upcoming_payments(days_ahead=days_ahead)
+        logger.info(f"Retrieved {len(payments)} upcoming predictions")
+        return payments
+        
     except Exception as e:
-        logger.error(f"Error fetching predictions by date range: {str(e)}")
+        logger.error(f"Error retrieving upcoming predictions: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail="Error fetching predictions by date range"
+            detail=f"Failed to retrieve upcoming predictions: {str(e)}"
         )
 
-@router.get("/{tr_no}", response_model=schemas.FuturePrediction)
-async def get_future_prediction(tr_no: int, db: Session = Depends(get_db)):
-    """Get future prediction by transaction number.
-    
-    Args:
-        tr_no: Transaction number
-        db: Database session
-    
-    Returns:
-        schemas.FuturePrediction: Future prediction details
-    
-    Raises:
-        HTTPException: If prediction not found
-    """
-    prediction = crud.future.get_by_tr_no(db, tr_no)
-    if not prediction:
-        raise HTTPException(status_code=404, detail="Future prediction not found")
-    return prediction
-
-@router.post("/", response_model=schemas.FuturePrediction)
-async def create_future_prediction(
-    prediction_in: schemas.FutureCreate,
-    db: Session = Depends(get_db)
-):
-    """Create a new future prediction.
-    
-    Args:
-        prediction_in: Future prediction data
-        db: Database session
-    
-    Returns:
-        schemas.FuturePrediction: Created future prediction
-    """
+@router.get("/predictions/{tr_no}", response_model=FuturePrediction)
+async def get_future_prediction(
+    tr_no: int,
+    db: Session = Depends(deps.get_db)
+) -> FuturePrediction:
+    """Get a specific future payment prediction by transaction number."""
     try:
-        # Verify account exists
-        account = crud.account.get_by_cc_id(db, prediction_in.acc_id)
-        if not account:
+        crud = CRUDFuture()
+        payment = crud.get(db=db, id=tr_no)
+        if not payment:
             raise HTTPException(
                 status_code=404,
-                detail=f"Account with ID {prediction_in.acc_id} not found"
+                detail=f"Future prediction {tr_no} not found"
             )
-
-        prediction = crud.future.create(db, obj_in=prediction_in)
-        return prediction
+        return payment
+        
     except HTTPException:
         raise
+    except Exception as e:
+        logger.error(f"Error retrieving future prediction {tr_no}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve future prediction: {str(e)}"
+        )
+
+@router.post("/predictions", response_model=FuturePrediction)
+async def create_future_prediction(
+    prediction: FutureCreate,
+    db: Session = Depends(deps.get_db)
+) -> FuturePrediction:
+    """Create a new future payment prediction."""
+    try:
+        crud = CRUDFuture()
+        payment = crud.create(db=db, obj_in=prediction)
+        logger.info(f"Created future prediction {payment.TrNo}")
+        return payment
+        
     except Exception as e:
         logger.error(f"Error creating future prediction: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail="Error creating future prediction"
+            detail=f"Failed to create future prediction: {str(e)}"
         )
 
-@router.put("/{tr_no}", response_model=schemas.FuturePrediction)
+@router.put("/predictions/{tr_no}", response_model=FuturePrediction)
 async def update_future_prediction(
     tr_no: int,
-    prediction_in: schemas.FutureUpdate,
-    db: Session = Depends(get_db)
-):
-    """Update a future prediction.
-    
-    Args:
-        tr_no: Transaction number
-        prediction_in: Updated prediction data
-        db: Database session
-    
-    Returns:
-        schemas.FuturePrediction: Updated future prediction
-    
-    Raises:
-        HTTPException: If prediction not found
-    """
+    prediction: FutureUpdate,
+    db: Session = Depends(deps.get_db)
+) -> FuturePrediction:
+    """Update an existing future payment prediction."""
     try:
-        prediction = crud.future.get_by_tr_no(db, tr_no)
-        if not prediction:
+        crud = CRUDFuture()
+        existing_payment = crud.get(db=db, id=tr_no)
+        if not existing_payment:
             raise HTTPException(
                 status_code=404,
-                detail="Future prediction not found"
+                detail=f"Future prediction {tr_no} not found"
             )
-
-        # If account ID is being updated, verify new account exists
-        if prediction_in.acc_id and prediction_in.acc_id != prediction.acc_id:
-            account = crud.account.get_by_cc_id(db, prediction_in.acc_id)
-            if not account:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Account with ID {prediction_in.acc_id} not found"
-                )
-
-        updated_prediction = crud.future.update(
-            db, db_obj=prediction, obj_in=prediction_in
-        )
-        return updated_prediction
+            
+        payment = crud.update(db=db, db_obj=existing_payment, obj_in=prediction)
+        logger.info(f"Updated future prediction {tr_no}")
+        return payment
+        
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating future prediction: {str(e)}")
+        logger.error(f"Error updating future prediction {tr_no}: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail="Error updating future prediction"
+            detail=f"Failed to update future prediction: {str(e)}"
         )
 
-@router.patch("/{tr_no}/mark-paid", response_model=schemas.FuturePrediction)
-async def mark_prediction_as_paid(tr_no: int, db: Session = Depends(get_db)):
-    """Mark a future prediction as paid.
-    
-    Args:
-        tr_no: Transaction number
-        db: Database session
-    
-    Returns:
-        schemas.FuturePrediction: Updated future prediction
-    
-    Raises:
-        HTTPException: If prediction not found
-    """
+@router.post("/predictions/{tr_no}/mark-paid", response_model=FuturePrediction)
+async def mark_prediction_as_paid(
+    tr_no: int,
+    payment_service: FuturePaymentService = Depends(get_payment_service)
+) -> FuturePrediction:
+    """Mark a future payment prediction as paid."""
     try:
-        prediction = crud.future.mark_as_paid(db, tr_no)
-        if not prediction:
+        payment = await payment_service.mark_payment_as_paid(tr_no=tr_no)
+        if not payment:
             raise HTTPException(
                 status_code=404,
-                detail="Future prediction not found"
+                detail=f"Future prediction {tr_no} not found"
             )
-        return prediction
+            
+        logger.info(f"Marked future prediction {tr_no} as paid")
+        return payment
+        
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error marking prediction as paid: {str(e)}")
+        logger.error(f"Error marking future prediction {tr_no} as paid: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail="Error marking prediction as paid"
+            detail=f"Failed to mark prediction as paid: {str(e)}"
         )
 
-@router.delete("/{tr_no}", response_model=schemas.FuturePrediction)
-async def delete_future_prediction(tr_no: int, db: Session = Depends(get_db)):
-    """Delete a future prediction.
-    
-    Args:
-        tr_no: Transaction number
-        db: Database session
-    
-    Returns:
-        schemas.FuturePrediction: Deleted future prediction
-    
-    Raises:
-        HTTPException: If prediction not found
-    """
+@router.delete("/predictions/{tr_no}")
+async def delete_future_prediction(
+    tr_no: int,
+    db: Session = Depends(deps.get_db)
+) -> dict:
+    """Delete a future payment prediction."""
     try:
-        prediction = crud.future.get_by_tr_no(db, tr_no)
-        if not prediction:
+        crud = CRUDFuture()
+        payment = crud.remove(db=db, id=tr_no)
+        if not payment:
             raise HTTPException(
                 status_code=404,
-                detail="Future prediction not found"
+                detail=f"Future prediction {tr_no} not found"
             )
-
-        deleted_prediction = crud.future.remove(db, id=tr_no)
-        return deleted_prediction
+            
+        logger.info(f"Deleted future prediction {tr_no}")
+        return {"status": "success", "message": f"Future prediction {tr_no} deleted"}
+        
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error deleting future prediction: {str(e)}")
+        logger.error(f"Error deleting future prediction {tr_no}: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail="Error deleting future prediction"
+            detail=f"Failed to delete future prediction: {str(e)}"
         )

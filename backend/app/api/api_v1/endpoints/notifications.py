@@ -1,156 +1,121 @@
+"""
+API endpoints for handling notifications.
+Following Single Responsibility and Dependency Injection principles.
+"""
 import logging
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from telethon import TelegramClient
-from datetime import datetime, date, timedelta
-from typing import List
-import os
-
 from app.api import deps
-from app.core.config import settings
-from app.crud.crud_future import crud_future
-
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+from app.services.notification.telegram import TelegramNotificationProvider
+from app.services.payment.future_payment_service import FuturePaymentService
+from app.schemas.schemas import FuturePrediction
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-async def get_telegram_client():
-    """Initialize and return Telegram client with credentials from env."""
+async def get_notification_provider() -> TelegramNotificationProvider:
+    """Dependency to get configured notification provider."""
+    provider = TelegramNotificationProvider()
     try:
-        logger.info("Initializing Telegram client...")
-        logger.debug(f"API ID: {settings.TELEGRAM_API_ID} (type: {type(settings.TELEGRAM_API_ID)})")
-        logger.debug(f"Channel ID: {settings.TELEGRAM_CHANNEL_ID} (type: {type(settings.TELEGRAM_CHANNEL_ID)})")
-        
-        client = TelegramClient(
-            'notification_sender',
-            settings.TELEGRAM_API_ID,
-            settings.TELEGRAM_API_HASH
-        )
-        
-        logger.info("Connecting to Telegram...")
-        await client.connect()
-        
-        if not await client.is_user_authorized():
-            logger.warning("Telegram client not authorized")
-            await client.send_code_request(settings.TELEGRAM_PHONE_NUMBER)
-            raise HTTPException(
-                status_code=500,
-                detail="Telegram client not authorized. Please complete authorization process."
-            )
-        
-        logger.info("Telegram client initialized successfully")
-        return client
-    except Exception as e:
-        logger.error(f"Failed to initialize Telegram client: {str(e)}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to initialize Telegram client: {str(e)}"
-        )
-
-def format_payment_message(payment) -> str:
-    """Format payment details into a readable message."""
-    return (
-        f"🔔 Upcoming Payment Alert!\n\n"
-        f"📅 Date: {payment.Date}\n"
-        f"📝 Description: {payment.Description}\n"
-        f"💰 Amount: ₹{abs(payment.Amount):,.2f}\n"
-        f"💳 Payment Mode: {payment.PaymentMode}\n"
-        f"🏢 Department: {payment.Department}\n"
-        f"📋 Category: {payment.Category}\n"
-        f"💭 Comments: {payment.Comments or 'N/A'}"
-    )
-
-@router.post("/send-payment-notifications", response_model=dict)
-async def send_payment_notifications(
-    db: Session = Depends(deps.get_db)
-) -> dict:
-    """
-    Send notifications for next 5 upcoming payments to Telegram channel.
-    Fetches real data from the database.
-    
-    Returns:
-        dict: Message indicating success or failure
-    """
-    client = None
-    try:
-        logger.info("=== Starting payment notification process ===")
-        logger.debug(f"Database session ID: {id(db)}")
-        logger.debug(f"Database session is active: {db.is_active}")
-        
-        # First verify database connection
-        try:
-            db.execute("SELECT 1")
-            logger.debug("Database connection verified")
-        except Exception as e:
-            logger.error(f"Database connection test failed: {str(e)}")
-            raise HTTPException(
-                status_code=500,
-                detail="Database connection failed"
-            )
-        
-        # Get next 5 unpaid payments
-        logger.debug("Fetching unpaid payments...")
-        upcoming_payments = crud_future.get_unpaid(
-            db,
-            limit=5
-        )
-        
-        # Debug log the found payments
-        logger.debug(f"Found {len(upcoming_payments) if upcoming_payments else 0} upcoming payments")
-        if upcoming_payments:
-            for payment in upcoming_payments:
-                logger.debug(
-                    f"Payment details: "
-                    f"TrNo={payment.TrNo}, "
-                    f"Date={payment.Date}, "
-                    f"Description={payment.Description}, "
-                    f"Amount={payment.Amount}, "
-                    f"Paid={payment.Paid}"
+        if not await provider.verify_connection():
+            if not await provider.connect():
+                raise HTTPException(
+                    status_code=503,
+                    detail="Failed to connect to notification service"
                 )
-        else:
-            logger.debug("No payments returned from crud_future.get_unpaid")
-        
-        if not upcoming_payments:
-            logger.warning("No upcoming payments found")
-            return {"message": "No upcoming payments found for notification"}
-        
-        # Initialize Telegram client
-        logger.debug("Initializing Telegram client...")
-        client = await get_telegram_client()
-        
-        logger.info(f"Sending notifications for {len(upcoming_payments)} payments...")
-        
-        # Send notifications for each payment
-        for i, payment in enumerate(upcoming_payments, 1):
-            logger.debug(f"Processing payment {i}/{len(upcoming_payments)}")
-            message = format_payment_message(payment)
-            logger.debug(f"Formatted message for payment {i}:\n{message}")
-            
-            await client.send_message(
-                settings.TELEGRAM_CHANNEL_ID,
-                message
-            )
-            logger.debug(f"Notification {i} sent successfully")
-        
-        logger.info("All notifications sent successfully")
-        return {
-            "message": f"Successfully sent notifications for {len(upcoming_payments)} upcoming payments"
-        }
-            
+        return provider
     except Exception as e:
-        logger.error(f"Failed to send notifications: {str(e)}", exc_info=True)
+        logger.error(f"Error initializing notification provider: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail="Notification service unavailable"
+        )
+
+@router.post("/send-payment-notifications", response_model=List[FuturePrediction])
+async def send_payment_notifications(
+    days_ahead: int = 7,
+    db: Session = Depends(deps.get_db),
+    notification_provider: TelegramNotificationProvider = Depends(get_notification_provider)
+) -> List[FuturePrediction]:
+    """
+    Send notifications for upcoming payments in the next specified days.
+    Returns the list of payments that were notified about.
+    """
+    try:
+        # Initialize the payment service with notification provider
+        payment_service = FuturePaymentService(
+            db=db,
+            notification_provider=notification_provider
+        )
+        
+        # Get upcoming payments and send notifications
+        upcoming_payments = await payment_service.get_upcoming_payments(
+            days_ahead=days_ahead
+        )
+        
+        logger.info(f"Successfully sent notifications for {len(upcoming_payments)} payments")
+        return upcoming_payments
+        
+    except Exception as e:
+        logger.error(f"Error sending payment notifications: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to send notifications: {str(e)}"
+            detail=f"Failed to send payment notifications: {str(e)}"
         )
     finally:
-        # Always disconnect the client
-        if client:
-            try:
-                logger.info("Disconnecting Telegram client...")
-                await client.disconnect()
-                logger.info("Telegram client disconnected")
-            except Exception as e:
-                logger.error(f"Error disconnecting client: {str(e)}", exc_info=True)
+        # Ensure we disconnect from the notification service
+        await notification_provider.disconnect()
+
+@router.post("/authorize-telegram")
+async def authorize_telegram(
+    phone_number: str,
+    verification_code: str,
+    notification_provider: TelegramNotificationProvider = Depends(get_notification_provider)
+) -> dict:
+    """
+    Authorize Telegram client with phone number and verification code.
+    This should be called only once to create the session file.
+    """
+    try:
+        success = await notification_provider.authorize(
+            phone_number=phone_number,
+            code=verification_code
+        )
+        
+        if success:
+            return {"status": "success", "message": "Telegram client authorized successfully"}
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Failed to authorize Telegram client"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error authorizing Telegram client: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Authorization failed: {str(e)}"
+        )
+    finally:
+        await notification_provider.disconnect()
+
+@router.get("/verify-notification-service")
+async def verify_notification_service(
+    notification_provider: TelegramNotificationProvider = Depends(get_notification_provider)
+) -> dict:
+    """Verify if the notification service is properly configured and connected."""
+    try:
+        is_connected = await notification_provider.verify_connection()
+        return {
+            "status": "connected" if is_connected else "disconnected",
+            "service": "telegram"
+        }
+    except Exception as e:
+        logger.error(f"Error verifying notification service: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to verify notification service: {str(e)}"
+        )
+    finally:
+        await notification_provider.disconnect()
