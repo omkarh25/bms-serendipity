@@ -201,6 +201,10 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 DEBUG=1
 DATABASE_URL=sqlite:///./kaas.db
 SECRET_KEY=your-secret-key
+TELEGRAM_API_ID=your_api_id
+TELEGRAM_API_HASH=your_api_hash
+TELEGRAM_PHONE_NUMBER=your_phone_number
+TELEGRAM_CHANNEL_ID=your_channel_id
 ```
 
 ### Frontend (.env.local)

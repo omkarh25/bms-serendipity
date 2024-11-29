@@ -8,7 +8,7 @@ from datetime import date
 
 from app.db.database import get_db
 from app.crud import crud
-from app.schemas import schemas
+from app.schemas.transaction import Transaction, TransactionCreate, TransactionUpdate
 from app.core.config import settings
 
 # Configure logging
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.get("/", response_model=List[schemas.Transaction])
+@router.get("/", response_model=List[Transaction])
 async def get_transactions(
     db: Session = Depends(get_db),
     skip: int = Query(0, ge=0),
@@ -24,36 +24,27 @@ async def get_transactions(
     category: Optional[str] = None,
     department: Optional[str] = None
 ):
-    """Get list of transactions with optional filtering.
-    
-    Args:
-        db: Database session
-        skip: Number of records to skip
-        limit: Maximum number of records to return
-        category: Optional category filter
-        department: Optional department filter
-    
-    Returns:
-        List[schemas.Transaction]: List of transactions
-    """
+    """Get list of transactions with optional filtering."""
     try:
+        transactions = crud.transaction.get_all(db, skip=skip, limit=limit)
+        
+        # Filter by category if provided
         if category:
-            transactions = crud.transaction.get_by_category(db, category, skip, limit)
-        elif department:
-            transactions = crud.transaction.get_by_department(db, department, skip, limit)
-        else:
-            transactions = crud.transaction.get_all(db)
+            transactions = [t for t in transactions if t.Category == category]
             
-        # Debug: Print the transactions before returning
-        for t in transactions:
-            logger.debug(f"Transaction data: {vars(t)}")
+        # Filter by department if provided    
+        if department:
+            transactions = [t for t in transactions if t.Department == department]
             
         return transactions
     except Exception as e:
         logger.error(f"Error fetching transactions: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error fetching transactions: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
-@router.get("/date-range", response_model=List[schemas.Transaction])
+@router.get("/date-range", response_model=List[Transaction])
 async def get_transactions_by_date_range(
     start_date: date,
     end_date: date,
@@ -67,7 +58,7 @@ async def get_transactions_by_date_range(
         db: Database session
     
     Returns:
-        List[schemas.Transaction]: List of transactions
+        List[Transaction]: List of transactions
     """
     try:
         transactions = crud.transaction.get_by_date_range(db, start_date, end_date)
@@ -79,7 +70,7 @@ async def get_transactions_by_date_range(
             detail="Error fetching transactions by date range"
         )
 
-@router.get("/{sl_no}", response_model=schemas.Transaction)
+@router.get("/{sl_no}", response_model=Transaction)
 async def get_transaction(sl_no: int, db: Session = Depends(get_db)):
     """Get transaction by serial number.
     
@@ -88,7 +79,7 @@ async def get_transaction(sl_no: int, db: Session = Depends(get_db)):
         db: Database session
     
     Returns:
-        schemas.Transaction: Transaction details
+        Transaction: Transaction details
     
     Raises:
         HTTPException: If transaction not found
@@ -98,9 +89,9 @@ async def get_transaction(sl_no: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Transaction not found")
     return transaction
 
-@router.post("/", response_model=schemas.Transaction)
+@router.post("/", response_model=Transaction)
 async def create_transaction(
-    transaction_in: schemas.TransactionCreate,
+    transaction_in: TransactionCreate,
     db: Session = Depends(get_db)
 ):
     """Create a new transaction.
@@ -110,7 +101,7 @@ async def create_transaction(
         db: Database session
     
     Returns:
-        schemas.Transaction: Created transaction
+        Transaction: Created transaction
     """
     try:
         # Verify account exists
@@ -136,10 +127,10 @@ async def create_transaction(
         logger.error(f"Error creating transaction: {str(e)}")
         raise HTTPException(status_code=500, detail="Error creating transaction")
 
-@router.put("/{sl_no}", response_model=schemas.Transaction)
+@router.put("/{sl_no}", response_model=Transaction)
 async def update_transaction(
     sl_no: int,
-    transaction_in: schemas.TransactionUpdate,
+    transaction_in: TransactionUpdate,
     db: Session = Depends(get_db)
 ):
     """Update a transaction.
@@ -150,7 +141,7 @@ async def update_transaction(
         db: Database session
     
     Returns:
-        schemas.Transaction: Updated transaction
+        Transaction: Updated transaction
     
     Raises:
         HTTPException: If transaction not found
@@ -191,7 +182,7 @@ async def update_transaction(
         logger.error(f"Error updating transaction: {str(e)}")
         raise HTTPException(status_code=500, detail="Error updating transaction")
 
-@router.delete("/{sl_no}", response_model=schemas.Transaction)
+@router.delete("/{sl_no}", response_model=Transaction)
 async def delete_transaction(sl_no: int, db: Session = Depends(get_db)):
     """Delete a transaction.
     
@@ -200,7 +191,7 @@ async def delete_transaction(sl_no: int, db: Session = Depends(get_db)):
         db: Database session
     
     Returns:
-        schemas.Transaction: Deleted transaction
+        Transaction: Deleted transaction
     
     Raises:
         HTTPException: If transaction not found

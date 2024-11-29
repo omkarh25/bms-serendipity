@@ -25,15 +25,16 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     
     # Telegram Settings
-    TELEGRAM_API_ID: int  # Changed to int
-    TELEGRAM_API_HASH: str
-    TELEGRAM_PHONE_NUMBER: str
-    TELEGRAM_CHANNEL_ID: int
+    TELEGRAM_API_ID: Optional[str] = None
+    TELEGRAM_API_HASH: Optional[str] = None
+    TELEGRAM_PHONE_NUMBER: Optional[str] = None
+    TELEGRAM_CHANNEL_ID: Optional[str] = None
     
     # Database Settings
     DATABASE_URL: str = "sqlite:///./sql_app.db"
     
     class Config:
         env_file = ".env"
+        case_sensitive = True
 
 settings = Settings()

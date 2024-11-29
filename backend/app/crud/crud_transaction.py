@@ -1,127 +1,61 @@
-from typing import List
-import logging
+from typing import List, Optional
 from sqlalchemy.orm import Session
-from ..models.models import TransactionsPast as Transaction
-from .base import CRUDBase
-from app.schemas.schemas import TransactionCreate, TransactionUpdate
+from sqlalchemy import between
+from datetime import datetime
+from app.models.transaction import Transaction
+from app.schemas.transaction import TransactionCreate, TransactionUpdate
 
-logger = logging.getLogger(__name__)
+class CRUDTransaction:
+    def get_all(self, db: Session, skip: int = 0, limit: int = 100) -> List[Transaction]:
+        return db.query(Transaction).offset(skip).limit(limit).all()
 
-class CRUDTransaction(CRUDBase[Transaction, TransactionCreate, TransactionUpdate]):
-    """
-    CRUD operations for Transactions
-    """
-    def __init__(self):
-        super().__init__(Transaction)
-
-    def get_multi(
-        self,
-        db: Session,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Transaction]:
-        """
-        Retrieve multiple transactions with pagination
-        
-        Args:
-            db (Session): Database session
-            skip (int): Number of records to skip
-            limit (int): Maximum number of records to return
-            
-        Returns:
-            List[Transaction]: List of transaction records
-            
-        Raises:
-            Exception: If database query fails
-        """
-        logger.debug(f"Executing get_multi with skip={skip}, limit={limit}")
-        try:
-            result = db.query(Transaction).offset(skip).limit(limit).all()
-            logger.debug(f"Successfully retrieved {len(result)} transactions")
-            return result
-        except Exception as e:
-            logger.exception("Error in get_multi")
-            raise
-
-    def get_by_category(
-        self,
-        db: Session,
-        category: str,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Transaction]:
-        """
-        Retrieve transactions by category
-        
-        Args:
-            db (Session): Database session
-            category (str): Category to filter by
-            skip (int): Number of records to skip
-            limit (int): Maximum number of records to return
-            
-        Returns:
-            List[Transaction]: List of transaction records
-        """
-        return db.query(Transaction).filter(
-            Transaction.category == category
-        ).offset(skip).limit(limit).all()
-
-    def get_by_department(
-        self,
-        db: Session,
-        department: str,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[Transaction]:
-        """
-        Retrieve transactions by department
-        
-        Args:
-            db (Session): Database session
-            department (str): Department to filter by
-            skip (int): Number of records to skip
-            limit (int): Maximum number of records to return
-            
-        Returns:
-            List[Transaction]: List of transaction records
-        """
-        return db.query(Transaction).filter(
-            Transaction.department == department
-        ).offset(skip).limit(limit).all()
-
-    def get_by_sl_no(self, db: Session, sl_no: int) -> Transaction:
-        """
-        Retrieve transaction by serial number
-        
-        Args:
-            db (Session): Database session
-            sl_no (int): Serial number to find
-            
-        Returns:
-            Transaction: Transaction record
-        """
-        return db.query(Transaction).filter(Transaction.sl_no == sl_no).first()
+    def get_by_sl_no(self, db: Session, sl_no: int) -> Optional[Transaction]:
+        return db.query(Transaction).filter(Transaction.TrNo == sl_no).first()
 
     def get_by_date_range(
-        self,
-        db: Session,
-        start_date: str,
-        end_date: str
+        self, db: Session, start_date: datetime, end_date: datetime
     ) -> List[Transaction]:
-        """
-        Retrieve transactions within a date range
-        
-        Args:
-            db (Session): Database session
-            start_date (str): Start date
-            end_date (str): End date
-            
-        Returns:
-            List[Transaction]: List of transaction records
-        """
         return db.query(Transaction).filter(
-            Transaction.date >= start_date,
-            Transaction.date <= end_date
+            between(Transaction.Date, start_date, end_date)
         ).all()
+
+    def create(self, db: Session, *, obj_in: TransactionCreate) -> Transaction:
+        # Convert Hand Loans to Hand_Loans for database storage
+        category = obj_in.Category
+        if category == 'Hand Loans':
+            category = 'Hand_Loans'
+
+        db_obj = Transaction(
+            Date=obj_in.Date,
+            Description=obj_in.Description,
+            Amount=obj_in.Amount,
+            PaymentMode=obj_in.PaymentMode,
+            AccID=obj_in.AccID,
+            Department=obj_in.Department,
+            Comments=obj_in.Comments,
+            Category=category,
+            ZohoMatch=obj_in.ZohoMatch
+        )
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+    def update(
+        self, db: Session, *, db_obj: Transaction, obj_in: TransactionUpdate
+    ) -> Transaction:
+        update_data = obj_in.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(db_obj, field, value)
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+    def remove(self, db: Session, *, id: int) -> Transaction:
+        obj = db.query(Transaction).get(id)
+        db.delete(obj)
+        db.commit()
+        return obj
 
 transaction = CRUDTransaction()
