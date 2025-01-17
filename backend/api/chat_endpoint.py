@@ -10,7 +10,7 @@ from datetime import datetime
 import uuid
 import logging
 
-from ..Agents.BusinessRagAgent.business_expert import (
+from backend.Agents.BusinessRagAgent.business_expert import (
     pydantic_ai_expert,
     PydanticAIDeps
 )
