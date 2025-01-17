@@ -33,12 +33,14 @@ const agents: Record<string, Agent> = {
 /**
  * Chat interface component for individual agents
  */
-export default async function AgentChatPage({ 
-  params 
-}: { 
+interface PageProps {
   params: { agentId: string }
-}) {
-  const agent = agents[params.agentId]
+}
+
+export default async function AgentChatPage({ params }: PageProps) {
+  // Ensure params is resolved before using
+  const resolvedParams = await Promise.resolve(params)
+  const agent = agents[resolvedParams.agentId]
 
   if (!agent) {
     return redirect('/chat')
