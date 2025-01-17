@@ -30,6 +30,7 @@ export async function POST(request: Request) {
         agent_id: agentId,
         user_id: authData.userId,
       }),
+      cache: 'no-store'
     })
 
     if (!response.ok) {

@@ -70,7 +70,7 @@ export default function ChatInterface({ agentId }: ChatInterfaceProps) {
       const assistantMessage: ChatMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: data.response,
+        content: data.message,
         timestamp: new Date()
       }
 
