@@ -169,21 +169,75 @@ async def chat_endpoint(
         
         logger.info("=== Processing AI Response ===")
         logger.info("Raw result type: %s", type(result))
-        response = str(result)  # Convert RunResult to string
-        logger.info("Processed response length: %d characters", len(response))
+        # Extract components from the RunResult
+        raw_response = str(result)
+        logger.info("Raw response length: %d characters", len(raw_response))
+        
+        # Extract thinking steps
+        thinking_steps = []
+        if "<thinking>" in raw_response:
+            thinking_parts = raw_response.split("<thinking>")
+            for part in thinking_parts[1:]:  # Skip first part before thinking
+                if "</thinking>" in part:
+                    step = part.split("</thinking>")[0].strip()
+                    if step:
+                        thinking_steps.append(step)
+        
+        # Extract main message content
+        message_content = raw_response
+        
+        # Clean up the message content
+        cleanup_markers = [
+            "RunResult(_all_messages=[ModelRequest(parts=",
+            "SystemPromptPart(content=",
+            "UserPromptPart(content=",
+            "ModelResponse(parts=[TextPart(content=",
+            "<thinking>",
+            "</thinking>",
+            "Hello! I'm an AI assistant"
+        ]
+        
+        for marker in cleanup_markers:
+            if marker in message_content:
+                message_content = message_content.split(marker)[-1]
+        
+        # Remove any trailing metadata or system text
+        if "), UserPromptPart" in message_content:
+            message_content = message_content.split("), UserPromptPart")[0]
+        if "), timestamp=" in message_content:
+            message_content = message_content.split("), timestamp=")[0]
+            
+        message_content = message_content.strip().strip("'").strip('"')
+        
+        # Extract usage information from the result metadata
+        usage = None
+        if hasattr(result, '_usage'):
+            usage = {
+                'requestTokens': getattr(result._usage, 'request_tokens', 0),
+                'responseTokens': getattr(result._usage, 'response_tokens', 0),
+                'totalTokens': getattr(result._usage, 'total_tokens', 0)
+            }
+        
+        # Create the structured response
+        structured_response = {
+            'message': message_content,
+            'thinking': thinking_steps if thinking_steps else None,
+            'usage': usage,
+            'context': raw_response if thinking_steps else None  # Include raw response as context if thinking steps exist
+        }
         
         logger.info("=== Saving AI Response ===")
-        # Save AI response
-        await save_chat_message('assistant', response, {
+        # Save AI response with metadata
+        await save_chat_message('assistant', message_content, {
             'agent_id': message.agent_id,
             'user_id': message.user_id,
-            'agent': 'business_expert'
+            'agent': 'business_expert',
+            'thinking_steps': thinking_steps,
+            'usage': usage
         })
         
         logger.info("=== Request Complete ===")
-        return {
-            'message': response
-        }
+        return structured_response
         
     except Exception as e:
         logger.error("=== Error Processing Request ===")
