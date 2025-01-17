@@ -36,10 +36,9 @@ const agents: Record<string, Agent> = {
 export default async function AgentChatPage({ 
   params 
 }: { 
-  params: Promise<{ agentId: string }> | { agentId: string }
+  params: { agentId: string }
 }) {
-  const resolvedParams = await Promise.resolve(params)
-  const agent = agents[resolvedParams.agentId]
+  const agent = agents[params.agentId]
 
   if (!agent) {
     return redirect('/chat')

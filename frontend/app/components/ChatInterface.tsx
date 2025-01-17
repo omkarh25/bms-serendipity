@@ -241,8 +241,9 @@ export default function ChatInterface({ agentId }: ChatInterfaceProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Tweet Generation Form */}
-      <form onSubmit={handleTweetGeneration} className="p-6 border-t bg-gray-50">
+      {/* Tweet Generation Form - Only show for marketing agent */}
+      {agentId === 'marketing' && (
+        <form onSubmit={handleTweetGeneration} className="p-6 border-t bg-gray-50">
         <div className="grid grid-cols-3 gap-4 mb-4">
           <input
             type="text"
@@ -280,7 +281,8 @@ export default function ChatInterface({ agentId }: ChatInterfaceProps) {
         >
           Generate Tweets
         </button>
-      </form>
+        </form>
+      )}
 
       {/* Chat Input Form */}
       <form onSubmit={handleSubmit} className="p-6 border-t bg-gray-50">
