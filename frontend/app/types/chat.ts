@@ -23,3 +23,22 @@ export interface Agent {
   icon: string
   backgroundColor: string
 }
+
+/**
+ * Accountant chat request structure
+ */
+export interface AccountantChatRequest {
+  message: string
+  user_id: string
+  is_sql_query: boolean
+}
+
+/**
+ * Accountant chat response structure
+ */
+export interface AccountantChatResponse {
+  message: string
+  sql_query?: string
+  results?: Record<string, number | string>[]
+  error?: string
+}

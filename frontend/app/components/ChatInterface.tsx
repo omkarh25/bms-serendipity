@@ -3,9 +3,9 @@
  */
 'use client'
 
-import { useState, FormEvent, useRef, useEffect } from 'react'
-import { ChatMessage } from '../types/chat'
 import { useUser } from '@clerk/nextjs'
+import { FormEvent, useEffect, useRef, useState } from 'react'
+import { ChatMessage } from '../types/chat'
 import { TweetResponse } from '../types/tweet'
 import CollapsibleInfo from './CollapsibleInfo'
 import UsageStats from './UsageStats'
@@ -73,14 +73,14 @@ export default function ChatInterface({ agentId }: ChatInterfaceProps) {
       }
 
       const data: TweetResponse = await response.json()
-      
+
       // Clean and format the response
       const tweet = data.tweet.replace(/^"|"$/g, '') // Remove surrounding quotes
       const chainOfThought = data.chain_of_thought
-      const references = Array.isArray(data.references) 
-        ? data.references 
+      const references = Array.isArray(data.references)
+        ? data.references
         : data.references.split('\n').filter(Boolean)
-      
+
       // Add tweet generation result to chat
       const assistantMessage: ChatMessage & { details?: MessageResponse } = {
         id: Date.now().toString(),
@@ -126,30 +126,60 @@ export default function ChatInterface({ agentId }: ChatInterfaceProps) {
     setIsLoading(true)
 
     try {
-      const response = await fetch('/api/chat', {
+      let endpoint = '/api/chat';
+      let payload: {
+        message: string;
+        agentId?: string;
+        userId?: string;
+        user_id?: string;
+        is_sql_query?: boolean;
+      } = {
+        message: inputMessage,
+        agentId,
+        userId: user?.id
+      };
+
+      // Special handling for accountant agent
+      if (agentId === 'accountant') {
+        endpoint = 'http://localhost:8000/chat/accountant';
+        payload = {
+          message: inputMessage,
+          user_id: user?.id || 'anonymous',
+          is_sql_query: true // Default to true as we're dealing with financial data
+        };
+      }
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          message: inputMessage,
-          agentId,
-          userId: user?.id
-        }),
+        body: JSON.stringify(payload),
       })
 
       if (!response.ok) {
         throw new Error('Failed to send message')
       }
 
-      const data: MessageResponse = await response.json()
+      const data = await response.json()
       
       const assistantMessage: ChatMessage & { details?: MessageResponse } = {
         id: Date.now().toString(),
         role: 'assistant',
         content: data.message,
         timestamp: new Date(),
-        details: data
+        details: {
+          message: data.message,
+          context: agentId === 'accountant' ? 
+            `SQL Query: ${data.sql_query || 'N/A'}\n\nResults: ${
+              data.results ? 
+                JSON.stringify(data.results, null, 2) : 
+                'No results'
+            }` : 
+            data.context,
+          thinking: data.thinking,
+          usage: data.usage
+        }
       }
 
       setMessages(prev => [...prev, assistantMessage])
@@ -174,19 +204,17 @@ export default function ChatInterface({ agentId }: ChatInterfaceProps) {
         {messages.map(message => (
           <div key={message.id} className="space-y-2">
             <div
-              className={`flex ${
-                message.role === 'user' ? 'justify-end' : 'justify-start'
-              }`}
+              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'
+                }`}
             >
               <div
-                className={`${
-                  message.role === 'user'
+                className={`${message.role === 'user'
                     ? 'bg-blue-600 text-white ml-12'
                     : 'bg-gray-100 text-gray-800 mr-12'
-                } p-4 rounded-2xl shadow-sm max-w-[85%]`}
+                  } p-4 rounded-2xl shadow-sm max-w-[85%]`}
               >
                 <p className="whitespace-pre-wrap">{message.content}</p>
-                
+
                 {message.details && (
                   <div className="mt-4 space-y-2">
                     {message.details.usage && (
@@ -198,7 +226,7 @@ export default function ChatInterface({ agentId }: ChatInterfaceProps) {
                         />
                       </CollapsibleInfo>
                     )}
-                    
+
                     {message.details.thinking && (
                       <CollapsibleInfo title="Thinking Steps">
                         <div className="space-y-2">
@@ -211,7 +239,7 @@ export default function ChatInterface({ agentId }: ChatInterfaceProps) {
                         </div>
                       </CollapsibleInfo>
                     )}
-                    
+
                     {message.details.context && (
                       <CollapsibleInfo title="Context">
                         <div className="prose prose-sm max-w-none">
@@ -244,43 +272,42 @@ export default function ChatInterface({ agentId }: ChatInterfaceProps) {
       {/* Tweet Generation Form - Only show for marketing agent */}
       {agentId === 'marketing' && (
         <form onSubmit={handleTweetGeneration} className="p-6 border-t bg-gray-50">
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <input
-            type="text"
-            value={project}
-            onChange={(e) => setProject(e.target.value)}
-            placeholder="Project"
-            className="p-4 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <input
+              type="text"
+              value={project}
+              onChange={(e) => setProject(e.target.value)}
+              placeholder="Project"
+              className="p-4 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              disabled={isLoading}
+            />
+            <input
+              type="text"
+              value={emotion}
+              onChange={(e) => setEmotion(e.target.value)}
+              placeholder="Emotion"
+              className="p-4 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              disabled={isLoading}
+            />
+            <input
+              type="text"
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="Topic"
+              className="p-4 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              disabled={isLoading}
+            />
+          </div>
+          <button
+            type="submit"
+            className={`w-full mb-4 px-6 py-4 rounded-xl text-white font-medium transition-all ${isLoading
+                ? 'bg-blue-400 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg'
+              }`}
             disabled={isLoading}
-          />
-          <input
-            type="text"
-            value={emotion}
-            onChange={(e) => setEmotion(e.target.value)}
-            placeholder="Emotion"
-            className="p-4 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            disabled={isLoading}
-          />
-          <input
-            type="text"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            placeholder="Topic"
-            className="p-4 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            disabled={isLoading}
-          />
-        </div>
-        <button
-          type="submit"
-          className={`w-full mb-4 px-6 py-4 rounded-xl text-white font-medium transition-all ${
-            isLoading
-              ? 'bg-blue-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg'
-          }`}
-          disabled={isLoading}
-        >
-          Generate Tweets
-        </button>
+          >
+            Generate Tweets
+          </button>
         </form>
       )}
 
@@ -297,11 +324,10 @@ export default function ChatInterface({ agentId }: ChatInterfaceProps) {
           />
           <button
             type="submit"
-            className={`px-6 py-4 rounded-xl text-white font-medium transition-all ${
-              isLoading
+            className={`px-6 py-4 rounded-xl text-white font-medium transition-all ${isLoading
                 ? 'bg-blue-400 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg'
-            }`}
+              }`}
             disabled={isLoading}
           >
             Send
