@@ -16,8 +16,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from Agents.BusinessRagAgent.business_expert import (
     pydantic_ai_expert,
-    PydanticAIDeps,
-    init_agent
+    PydanticAIDeps as BusinessDeps,
+    init_agent as init_business_agent
+)
+from Agents.AccountingAgent.account_expert import (
+    accounting_expert,
+    PydanticAIDeps as AccountingDeps,
+    init_agent as init_accounting_agent,
+    Success as SQLSuccess,
+    InvalidRequest as SQLInvalidRequest
 )
 from Agents.MarketingAgent.tweetGenerator import TweetGenerator
 
@@ -76,18 +83,29 @@ class ChatMessage(BaseModel):
     Pydantic model for chat message requests
     """
     message: str
-    agent_id: str
     user_id: str
+    is_sql_query: Optional[bool] = False
 
-async def get_deps() -> PydanticAIDeps:
+async def get_business_deps() -> BusinessDeps:
     """
-    Dependency injection for PydanticAIDeps
+    Dependency injection for Business Agent
     
     Returns:
-        PydanticAIDeps: Dependencies for the pydantic agent
+        BusinessDeps: Dependencies for the business expert agent
     """
-    return PydanticAIDeps(
+    return BusinessDeps(
         supabase=supabase_client,
+        ai_client=ai_client
+    )
+
+async def get_accounting_deps() -> AccountingDeps:
+    """
+    Dependency injection for Accounting Agent
+    
+    Returns:
+        AccountingDeps: Dependencies for the accounting expert agent
+    """
+    return AccountingDeps(
         ai_client=ai_client
     )
 
@@ -135,17 +153,17 @@ async def save_chat_message(role: str, content: str, metadata: Dict[str, Any]) -
         logger.error("Error details:", exc_info=True)
         raise HTTPException(status_code=500, detail="Error saving chat message")
 
-@app.post("/chat")
-async def chat_endpoint(
+@app.post("/chat/accountant")
+async def accountant_chat_endpoint(
     message: ChatMessage,
-    deps: PydanticAIDeps = Depends(get_deps)
+    accounting_deps: AccountingDeps = Depends(get_accounting_deps)
 ) -> Dict[str, Any]:
     """
-    Handle chat messages and return AI responses
+    Handle chat messages for the accounting expert
     
     Args:
         message (ChatMessage): The user's chat message
-        deps (PydanticAIDeps): Dependencies for the pydantic agent
+        accounting_deps (AccountingDeps): Dependencies for the accounting agent
         
     Returns:
         Dict[str, Any]: The AI's response and metadata
@@ -155,30 +173,168 @@ async def chat_endpoint(
     """
     try:
         # Log request details
-        logger.info("=== Processing Chat Request ===")
+        logger.info("=== Processing Accountant Chat Request ===")
         logger.info("Message: %s", message.message)
-        logger.info("Agent ID: %s", message.agent_id)
         logger.info("User ID: %s", message.user_id)
         
         # Log dependencies status
         logger.info("=== Checking Dependencies ===")
-        logger.info("Supabase client initialized: %s", bool(deps.supabase))
-        logger.info("AI client initialized: %s", bool(deps.ai_client))
+        logger.info("AI client initialized: %s", bool(ai_client))
         
         logger.info("=== Saving User Message ===")
         # Save user message
         await save_chat_message('user', message.message, {
-            'agent_id': message.agent_id,
+            'agent_id': 'accounting-expert',
             'user_id': message.user_id
         })
         
         logger.info("=== Getting AI Response ===")
-        # Initialize agent with dependencies
-        logger.info("Initializing AI agent with dependencies")
-        init_agent(deps)
+        # Initialize accounting agent
+        logger.info("Initializing accounting AI agent")
+        init_accounting_agent(accounting_deps)
         
-        # Get AI response using the pydantic agent
-        logger.info("Running AI agent with message")
+        if message.is_sql_query:
+            # Use SQL generation tool
+            logger.info("Running SQL generation")
+            result = await accounting_expert.run(message.message)
+            
+            # Handle SQL generation result
+            if isinstance(result, (SQLSuccess, SQLInvalidRequest)):
+                structured_response = {
+                    'message': result.dict(),
+                    'thinking': None,
+                    'usage': None
+                }
+                await save_chat_message('assistant', str(result.dict()), {
+                    'agent_id': 'accounting-expert',
+                    'user_id': message.user_id,
+                    'agent': 'accounting_expert',
+                    'is_sql_query': True
+                })
+                return structured_response
+        else:
+            # Regular accounting query
+            result = await accounting_expert.run(message.message)
+        
+        logger.info("=== Processing AI Response ===")
+        logger.info("Raw result type: %s", type(result))
+        # Extract components from the RunResult
+        raw_response = str(result)
+        logger.info("Raw response length: %d characters", len(raw_response))
+        
+        # Extract thinking steps
+        thinking_steps = []
+        if "<thinking>" in raw_response:
+            thinking_parts = raw_response.split("<thinking>")
+            for part in thinking_parts[1:]:  # Skip first part before thinking
+                if "</thinking>" in part:
+                    step = part.split("</thinking>")[0].strip()
+                    if step:
+                        thinking_steps.append(step)
+        
+        # Extract main message content
+        message_content = raw_response
+        
+        # Clean up the message content
+        cleanup_markers = [
+            "RunResult(_all_messages=[ModelRequest(parts=",
+            "SystemPromptPart(content=",
+            "UserPromptPart(content=",
+            "ModelResponse(parts=[TextPart(content=",
+            "<thinking>",
+            "</thinking>",
+            "Hello! I'm an AI assistant"
+        ]
+        
+        for marker in cleanup_markers:
+            if marker in message_content:
+                message_content = message_content.split(marker)[-1]
+        
+        # Remove any trailing metadata or system text
+        if "), UserPromptPart" in message_content:
+            message_content = message_content.split("), UserPromptPart")[0]
+        if "), timestamp=" in message_content:
+            message_content = message_content.split("), timestamp=")[0]
+            
+        message_content = message_content.strip().strip("'").strip('"')
+        
+        # Extract usage information from the result metadata
+        usage = None
+        if hasattr(result, '_usage'):
+            usage = {
+                'requestTokens': getattr(result._usage, 'request_tokens', 0),
+                'responseTokens': getattr(result._usage, 'response_tokens', 0),
+                'totalTokens': getattr(result._usage, 'total_tokens', 0)
+            }
+        
+        # Create the structured response
+        structured_response = {
+            'message': message_content,
+            'thinking': thinking_steps if thinking_steps else None,
+            'usage': usage,
+            'context': raw_response if thinking_steps else None  # Include raw response as context if thinking steps exist
+        }
+        
+        logger.info("=== Saving AI Response ===")
+        # Save AI response with metadata
+        await save_chat_message('assistant', message_content, {
+            'agent_id': 'accounting-expert',
+            'user_id': message.user_id,
+            'agent': 'accounting_expert',
+            'thinking_steps': thinking_steps,
+            'usage': usage
+        })
+        
+        logger.info("=== Request Complete ===")
+        return structured_response
+        
+    except Exception as e:
+        logger.error("=== Error Processing Request ===")
+        logger.error("Error type: %s", type(e).__name__)
+        logger.error("Error message: %s", str(e))
+        logger.error("Error details:", exc_info=True)  # This includes the full stack trace
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/chat")
+async def chat_endpoint(
+    message: ChatMessage,
+    business_deps: BusinessDeps = Depends(get_business_deps)
+) -> Dict[str, Any]:
+    """
+    Handle chat messages for the business expert
+    
+    Args:
+        message (ChatMessage): The user's chat message
+        business_deps (BusinessDeps): Dependencies for the business agent
+        
+    Returns:
+        Dict[str, Any]: The AI's response and metadata
+        
+    Raises:
+        HTTPException: If there's an error processing the message
+    """
+    try:
+        # Log request details
+        logger.info("=== Processing Business Chat Request ===")
+        logger.info("Message: %s", message.message)
+        logger.info("User ID: %s", message.user_id)
+        
+        # Log dependencies status
+        logger.info("=== Checking Dependencies ===")
+        logger.info("Supabase client initialized: %s", bool(supabase_client))
+        logger.info("AI client initialized: %s", bool(ai_client))
+        
+        logger.info("=== Saving User Message ===")
+        # Save user message
+        await save_chat_message('user', message.message, {
+            'agent_id': 'business-expert',
+            'user_id': message.user_id
+        })
+        
+        logger.info("=== Getting AI Response ===")
+        # Initialize business agent
+        logger.info("Initializing business AI agent")
+        init_business_agent(business_deps)
         result = await pydantic_ai_expert.run(message.message)
         
         logger.info("=== Processing AI Response ===")
@@ -243,7 +399,7 @@ async def chat_endpoint(
         logger.info("=== Saving AI Response ===")
         # Save AI response with metadata
         await save_chat_message('assistant', message_content, {
-            'agent_id': message.agent_id,
+            'agent_id': 'business-expert',
             'user_id': message.user_id,
             'agent': 'business_expert',
             'thinking_steps': thinking_steps,
@@ -259,7 +415,6 @@ async def chat_endpoint(
         logger.error("Error message: %s", str(e))
         logger.error("Error details:", exc_info=True)  # This includes the full stack trace
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/generate-tweet")
 async def generate_tweet(request: TweetRequest) -> Dict[str, Any]:
