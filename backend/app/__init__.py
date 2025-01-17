@@ -1,3 +1,0 @@
-"""
-BMS Serendipity Backend Application
-"""
