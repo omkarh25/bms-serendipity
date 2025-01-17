@@ -15,6 +15,8 @@ from backend.Agents.BusinessRagAgent.business_expert import (
     PydanticAIDeps,
     init_agent
 )
+from backend.Agents.MarketingAgent.tweetGenerator import TweetGenerator
+
 
 # Configure logging first
 logging.basicConfig(level=logging.INFO)
@@ -56,6 +58,14 @@ if not anthropic_api_key:
     raise ValueError("Anthropic API key not found in environment variables")
 
 ai_client = AsyncAnthropic(api_key=anthropic_api_key)
+
+class TweetRequest(BaseModel):
+    """
+    Pydantic model for tweet generation requests
+    """
+    project: str
+    emotion: Optional[str] = "Upbeat"
+    topic: Optional[str] = "General"
 
 class ChatMessage(BaseModel):
     """
@@ -244,6 +254,70 @@ async def chat_endpoint(
         logger.error("Error type: %s", type(e).__name__)
         logger.error("Error message: %s", str(e))
         logger.error("Error details:", exc_info=True)  # This includes the full stack trace
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate-tweet")
+async def generate_tweet(request: TweetRequest) -> Dict[str, Any]:
+    """
+    Generate a tweet based on project context and preferences
+    
+    Args:
+        request (TweetRequest): Tweet generation parameters
+        
+    Returns:
+        Dict[str, Any]: Generated tweet data
+        
+    Raises:
+        HTTPException: If there's an error generating the tweet
+    """
+    try:
+        logger.info("=== Processing Tweet Generation Request ===")
+        logger.info("Project: %s", request.project)
+        logger.info("Emotion: %s", request.emotion)
+        logger.info("Topic: %s", request.topic)
+        
+        # Initialize tweet generator
+        tweet_generator = TweetGenerator(request.project)
+        
+        # Generate tweet
+        logger.info("Generating tweet...")
+        result = tweet_generator.generate(
+            emotion=request.emotion,
+            topic=request.topic
+        )
+        
+        if not result:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to generate tweet"
+            )
+            
+        # Structure the response
+        response = {
+            "tweet": result.tweets,
+            "chain_of_thought": result.cot,
+            "references": result.references,
+            "metadata": {
+                "project": request.project,
+                "emotion": request.emotion,
+                "topic": request.topic,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+        
+        # Save the tweet
+        logger.info("Saving generated tweet...")
+        tweet_generator.save_tweet(result, 0)  # Save first tweet
+        
+        logger.info("=== Tweet Generation Complete ===")
+        return response
+        
+    except Exception as e:
+        logger.error("=== Error Generating Tweet ===")
+        logger.error("Error type: %s", type(e).__name__)
+        logger.error("Error message: %s", str(e))
+        logger.error("Error details:", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
