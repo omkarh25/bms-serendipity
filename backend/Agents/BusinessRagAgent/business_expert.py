@@ -41,12 +41,27 @@ When answering questions:
 Always be honest when you can't find relevant information in the documentation.
 """
 
+# Create the agent instance
 pydantic_ai_expert = Agent(
     model,
     system_prompt=system_prompt,
     deps_type=PydanticAIDeps,
     retries=2
 )
+
+# Global dependencies that will be used by tools
+_deps: PydanticAIDeps = PydanticAIDeps(supabase=None, ai_client=None)
+
+# Initialize the agent with dependencies
+def init_agent(deps: PydanticAIDeps):
+    """
+    Initialize the agent with the given dependencies.
+    
+    Args:
+        deps: Dependencies including Supabase and AI clients
+    """
+    global _deps
+    _deps = deps
 
 async def get_embedding(text: str, ai_client: AsyncAnthropic) -> List[float]:
     """
@@ -95,22 +110,12 @@ async def retrieve_relevant_documentation(ctx: RunContext[PydanticAIDeps], user_
     Returns:
         str: A formatted string containing the top 5 most relevant documentation chunks
     """
-    """
-    Retrieve relevant documentation chunks based on the query with RAG.
-    
-    Args:
-        ctx: The context including the Supabase client and OpenAI client
-        user_query: The user's question or query
-        
-    Returns:
-        A formatted string containing the top 5 most relevant documentation chunks
-    """
     try:
         # Get the embedding for the query
-        query_embedding = await get_embedding(user_query, ctx.deps.ai_client)
+        query_embedding = await get_embedding(user_query, _deps.ai_client)
         
         # Query Supabase for relevant documents
-        result = ctx.deps.supabase.rpc(
+        result = _deps.supabase.rpc(
             'match_md_files',
             {
                 'query_embedding': query_embedding,
@@ -149,7 +154,7 @@ async def list_documentation_pages(ctx: RunContext[PydanticAIDeps]) -> List[str]
     """
     try:
         # Query Supabase for unique URLs where source is local_docs
-        result = ctx.deps.supabase.from_('md_files') \
+        result = _deps.supabase.from_('md_files') \
             .select('url') \
             .eq('metadata->>source', 'local_docs') \
             .execute()
@@ -179,7 +184,7 @@ async def get_page_content(ctx: RunContext[PydanticAIDeps], url: str) -> str:
     """
     try:
         # Query Supabase for all chunks of this URL, ordered by chunk_number
-        result = ctx.deps.supabase.from_('md_files') \
+        result = _deps.supabase.from_('md_files') \
             .select('title, content, chunk_number') \
             .eq('url', url) \
             .eq('metadata->>source', 'local_docs') \

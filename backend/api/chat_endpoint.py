@@ -12,7 +12,8 @@ import logging
 
 from backend.Agents.BusinessRagAgent.business_expert import (
     pydantic_ai_expert,
-    PydanticAIDeps
+    PydanticAIDeps,
+    init_agent
 )
 
 # Configure logging first
@@ -33,9 +34,9 @@ app = FastAPI(title="Tech Support Chat API")
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["http://localhost:3000"],  # Frontend development server
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -89,20 +90,35 @@ async def save_chat_message(role: str, content: str, metadata: Dict[str, Any]) -
         HTTPException: If there's an error saving to Supabase
     """
     try:
+        message_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().isoformat()
+        
+        logger.info("=== Saving Chat Message ===")
+        logger.info("Message ID: %s", message_id)
+        logger.info("Role: %s", role)
+        logger.info("Timestamp: %s", timestamp)
+        logger.info("Content length: %d characters", len(content))
+        logger.info("Metadata: %s", metadata)
+        
         data = {
-            'id': str(uuid.uuid4()),
-            'timestamp': datetime.utcnow().isoformat(),
+            'id': message_id,
+            'timestamp': timestamp,
             'role': role,
             'content': content,
             'metadata': metadata,
             'saved_to_memory': False
         }
         
+        logger.info("Executing Supabase insert operation")
         result = supabase_client.table('user_chat').insert(data).execute()
-        logger.info("Chat message saved successfully")
+        logger.info("Supabase insert successful")
+        logger.info("Response status: %s", result.status_code if hasattr(result, 'status_code') else 'N/A')
         
     except Exception as e:
-        logger.error("Error saving chat message: %s", str(e))
+        logger.error("=== Error Saving Chat Message ===")
+        logger.error("Error type: %s", type(e).__name__)
+        logger.error("Error message: %s", str(e))
+        logger.error("Error details:", exc_info=True)
         raise HTTPException(status_code=500, detail="Error saving chat message")
 
 @app.post("/chat")
@@ -124,20 +140,39 @@ async def chat_endpoint(
         HTTPException: If there's an error processing the message
     """
     try:
-        logger.info("Received chat message: %s", message.message)
+        # Log request details
+        logger.info("=== Processing Chat Request ===")
+        logger.info("Message: %s", message.message)
+        logger.info("Agent ID: %s", message.agent_id)
+        logger.info("User ID: %s", message.user_id)
         
+        # Log dependencies status
+        logger.info("=== Checking Dependencies ===")
+        logger.info("Supabase client initialized: %s", bool(deps.supabase))
+        logger.info("AI client initialized: %s", bool(deps.ai_client))
+        
+        logger.info("=== Saving User Message ===")
         # Save user message
         await save_chat_message('user', message.message, {
             'agent_id': message.agent_id,
             'user_id': message.user_id
         })
         
-        # Get AI response using the pydantic agent
-        response = await pydantic_ai_expert.run(
-            deps,
-            user_input=message.message
-        )
+        logger.info("=== Getting AI Response ===")
+        # Initialize agent with dependencies
+        logger.info("Initializing AI agent with dependencies")
+        init_agent(deps)
         
+        # Get AI response using the pydantic agent
+        logger.info("Running AI agent with message")
+        result = await pydantic_ai_expert.run(message.message)
+        
+        logger.info("=== Processing AI Response ===")
+        logger.info("Raw result type: %s", type(result))
+        response = str(result)  # Convert RunResult to string
+        logger.info("Processed response length: %d characters", len(response))
+        
+        logger.info("=== Saving AI Response ===")
         # Save AI response
         await save_chat_message('assistant', response, {
             'agent_id': message.agent_id,
@@ -145,12 +180,16 @@ async def chat_endpoint(
             'agent': 'business_expert'
         })
         
+        logger.info("=== Request Complete ===")
         return {
             'message': response
         }
         
     except Exception as e:
-        logger.error("Error processing chat message: %s", str(e))
+        logger.error("=== Error Processing Request ===")
+        logger.error("Error type: %s", type(e).__name__)
+        logger.error("Error message: %s", str(e))
+        logger.error("Error details:", exc_info=True)  # This includes the full stack trace
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
