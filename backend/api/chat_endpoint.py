@@ -10,12 +10,16 @@ from datetime import datetime
 import uuid
 import logging
 
-from backend.Agents.BusinessRagAgent.business_expert import (
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+from Agents.BusinessRagAgent.business_expert import (
     pydantic_ai_expert,
     PydanticAIDeps,
     init_agent
 )
-from backend.Agents.MarketingAgent.tweetGenerator import TweetGenerator
+from Agents.MarketingAgent.tweetGenerator import TweetGenerator
 
 
 # Configure logging first
